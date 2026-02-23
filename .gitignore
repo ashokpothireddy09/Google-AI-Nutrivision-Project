@@ -1,0 +1,18 @@
+# Terraform local state and caches
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.pyo

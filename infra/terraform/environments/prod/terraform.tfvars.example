@@ -1,0 +1,31 @@
+project_id              = "nutrivision-liveagent-2026"
+region                  = "europe-west3"
+name_prefix             = "nutrivision"
+backend_service_name    = "nutrivision-backend"
+backend_container_image = "europe-west3-docker.pkg.dev/nutrivision-liveagent-2026/nutrivision-backend/backend:latest"
+
+allow_unauthenticated = true
+
+backend_cpu             = "1"
+backend_memory          = "1Gi"
+backend_min_instances   = 0
+backend_max_instances   = 3
+backend_timeout_seconds = 60
+backend_concurrency     = 80
+
+secret_names = [
+  "gemini_api_key",
+  "off_user_agent"
+]
+
+secret_env_mappings = {
+  GEMINI_API_KEY = "gemini_api_key"
+  OFF_USER_AGENT = "off_user_agent"
+}
+
+backend_env_vars = {
+  APP_ENV = "prod"
+}
+
+enable_memorystore       = false
+enable_cloud_sql_postgres = false
