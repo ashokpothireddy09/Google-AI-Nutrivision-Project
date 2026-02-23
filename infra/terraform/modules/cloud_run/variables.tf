@@ -95,5 +95,5 @@ variable "service_name" {
 variable "timeout_seconds" {
   description = "Request timeout for Cloud Run service in seconds"
   type        = number
-  default     = 60
+  default     = 3600
 }

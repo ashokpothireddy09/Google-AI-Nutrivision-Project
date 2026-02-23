@@ -10,21 +10,33 @@ backend_cpu             = "1"
 backend_memory          = "1Gi"
 backend_min_instances   = 0
 backend_max_instances   = 3
-backend_timeout_seconds = 60
+backend_timeout_seconds = 3600
 backend_concurrency     = 80
 
 secret_names = [
-  "gemini_api_key",
   "off_user_agent"
 ]
 
 secret_env_mappings = {
-  GEMINI_API_KEY = "gemini_api_key"
   OFF_USER_AGENT = "off_user_agent"
 }
 
+# Do not commit real values.
+# Prefer passing these at apply-time:
+# Vertex mode default (recommended):
+# TF_VAR_secret_payloads='{"off_user_agent":"NutriVisionLive/0.1 (contact: you@example.com)"}'
+#
+# API-key mode fallback:
+# 1) add "gemini_api_key" to secret_names
+# 2) add GEMINI_API_KEY = "gemini_api_key" to secret_env_mappings
+# 3) set TF_VAR_secret_payloads to include gemini_api_key value
+# secret_payloads = {}
+
 backend_env_vars = {
-  APP_ENV = "prod"
+  APP_ENV           = "prod"
+  GEMINI_USE_VERTEX = "true"
+  GCP_PROJECT_ID    = "nutrivision-liveagent-2026"
+  GCP_LOCATION      = "europe-west3"
 }
 
 enable_memorystore       = false

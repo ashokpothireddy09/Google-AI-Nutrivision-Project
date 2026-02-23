@@ -9,7 +9,12 @@ class Settings(BaseSettings):
     locale_country: str = "de"
     locale_language: str = "de"
     request_timeout_seconds: float = 5.0
+    cache_ttl_seconds: int = 300
+    off_user_agent: str = "NutriVisionLive/0.1 (contact: hackathon@nutrivision.local)"
 
+    gemini_use_vertex: bool = False
+    gcp_project_id: str | None = None
+    gcp_location: str = "europe-west3"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
 

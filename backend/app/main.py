@@ -4,6 +4,7 @@ import base64
 import logging
 import re
 import uuid
+from datetime import date
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -44,11 +45,22 @@ def _extract_barcode(text: str) -> str | None:
 
 
 async def _gemini_refine_text(default_text: str, language: str) -> str:
-    if not settings.gemini_api_key or genai is None:
+    if genai is None:
         return default_text
 
     try:
-        client = genai.Client(api_key=settings.gemini_api_key)
+        if settings.gemini_use_vertex:
+            if not settings.gcp_project_id:
+                return default_text
+            client = genai.Client(
+                vertexai=True,
+                project=settings.gcp_project_id,
+                location=settings.gcp_location,
+            )
+        else:
+            if not settings.gemini_api_key:
+                return default_text
+            client = genai.Client(api_key=settings.gemini_api_key)
         instruction = (
             "Rewrite this shopping verdict in exactly 2 concise sentences, conservative legal tone, no medical advice. "
             f"Language: {'German' if language == 'de' else 'English'}. Text: {default_text}"
@@ -74,6 +86,95 @@ def _sanitize_preview(image_b64: str | None) -> bool:
         return True
     except Exception:
         return False
+
+
+def _extract_any_date(text: str) -> date | None:
+    patterns = [
+        r"\b(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})\b",
+        r"\b(20\d{2})[./-](\d{1,2})[./-](\d{1,2})\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        parts = [int(item) for item in match.groups()]
+        try:
+            if len(str(parts[0])) == 4:
+                year, month, day = parts
+            else:
+                day, month, year = parts
+                if year < 100:
+                    year += 2000
+            return date(year, month, day)
+        except ValueError:
+            continue
+    return None
+
+
+def _expiry_guidance_from_text(text: str, language: str) -> str | None:
+    normalized = text.lower().strip()
+    if not normalized:
+        return None
+
+    is_mhd = any(key in normalized for key in ["mindestens haltbar", "mhd", "best before"])
+    is_use_by = any(key in normalized for key in ["zu verbrauchen", "verbrauchsdatum", "use by"])
+    if not (is_mhd or is_use_by):
+        return None
+
+    parsed_date = _extract_any_date(normalized)
+    if not parsed_date:
+        return (
+            "Bitte nenne das Datum im Format TT.MM.JJJJ, dann erklaere ich MHD vs Verbrauchsdatum."
+            if language == "de"
+            else "Please provide the date in DD.MM.YYYY format and I will explain best-before vs use-by."
+        )
+
+    today = date.today()
+    if is_use_by:
+        if parsed_date < today:
+            return (
+                "Verbrauchsdatum ueberschritten: bitte aus Sicherheitsgruenden nicht mehr verwenden."
+                if language == "de"
+                else "Use-by date has passed: for safety, do not consume it."
+            )
+        return (
+            "Verbrauchsdatum noch gueltig. Nach Ablauf bitte entsorgen."
+            if language == "de"
+            else "Use-by date is still valid. Discard after that date."
+        )
+
+    if parsed_date < today:
+        return (
+            "MHD ueberschritten: Aussehen, Geruch und Geschmack pruefen; bei Auffaelligkeiten entsorgen."
+            if language == "de"
+            else "Best-before date passed: check appearance, smell, and taste; discard if anything seems off."
+        )
+    return (
+        "MHD noch gueltig. Nach Ablauf zuerst sensorisch pruefen."
+        if language == "de"
+        else "Best-before date is still valid. After that date, do a sensory check first."
+    )
+
+
+def _build_disambiguation(
+    *,
+    candidates: list[SearchCandidate],
+    language: str,
+) -> tuple[str, list[dict[str, Any]]] | None:
+    if len(candidates) < 2:
+        return None
+
+    if (candidates[0].confidence - candidates[1].confidence) >= 0.08:
+        return None
+
+    top = candidates[:2]
+    options_text = (" oder " if language == "de" else " or ").join(candidate.name for candidate in top)
+    text = (
+        f"Mehrere Treffer sind nah beieinander: {options_text}. Welches Produkt meinst du?"
+        if language == "de"
+        else f"Multiple close matches found: {options_text}. Which product do you mean?"
+    )
+    return text, [candidate.model_dump() for candidate in top]
 
 
 async def _send_simple(
@@ -102,8 +203,6 @@ async def live_session(websocket: WebSocket) -> None:
     turn_counter = 0
     domain = "food"
     language = "de"
-    last_product_payload: dict[str, Any] = {}
-    last_product_identity = ProductIdentity()
 
     await _send_simple(
         websocket,
@@ -142,6 +241,10 @@ async def live_session(websocket: WebSocket) -> None:
                     )
                 continue
 
+            if msg_type == "audio_chunk":
+                _sanitize_preview(incoming.get("audio_b64"))
+                continue
+
             if msg_type == "barge_in":
                 await _send_simple(
                     websocket,
@@ -177,6 +280,23 @@ async def live_session(websocket: WebSocket) -> None:
             turn_id = f"T-{turn_counter:03d}"
             query_text = str(incoming.get("text") or "").strip()
             barcode = str(incoming.get("barcode") or "").strip() or _extract_barcode(query_text)
+            expiry_guidance = _expiry_guidance_from_text(query_text, language)
+            if expiry_guidance and not barcode:
+                speech = SpeechEvent(
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    text=expiry_guidance,
+                    language="de" if language == "de" else "en",
+                )
+                await websocket.send_json(speech.model_dump())
+                await _send_simple(
+                    websocket,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    event_type="session_state",
+                    message="Expiration guidance returned",
+                )
+                continue
 
             await _send_simple(
                 websocket,
@@ -224,6 +344,19 @@ async def live_session(websocket: WebSocket) -> None:
                 )
 
                 if search_result.selected_candidate:
+                    disambiguation = _build_disambiguation(candidates=search_result.candidates, language=language)
+                    if disambiguation:
+                        disambiguation_text, candidates_payload = disambiguation
+                        await _send_simple(
+                            websocket,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            event_type="uncertain_match",
+                            message=disambiguation_text,
+                            details={"candidates": candidates_payload},
+                        )
+                        continue
+
                     chosen: SearchCandidate = search_result.selected_candidate
                     identity = ProductIdentity(id=chosen.id, name=chosen.name, brand="Catalog match")
                     confidence = chosen.confidence
@@ -277,6 +410,7 @@ async def live_session(websocket: WebSocket) -> None:
                 session_id=session_id,
                 turn_id=turn_id,
                 domain=domain,
+                policy_version=normalized.policy_version,
                 product_identity=ProductIdentity(
                     id=identity.id,
                     name=product_payload.get("product_name") or identity.name,
@@ -306,9 +440,6 @@ async def live_session(websocket: WebSocket) -> None:
                 event_type="session_state",
                 message="Turn complete",
             )
-
-            last_product_payload = product_payload
-            last_product_identity = hud.product_identity
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected: %s", session_id)

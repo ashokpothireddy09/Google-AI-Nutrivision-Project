@@ -192,6 +192,7 @@ def normalize_and_score(product_payload: dict[str, Any], policy_result: PolicyTo
         return NormalizedScoreResult(
             spoken_summary_de=verdict_de,
             spoken_summary_en=verdict_en,
+            policy_version=policy_result.policy_version,
             grade_or_tier=grade,
             confidence=confidence,
             warnings=warnings,
@@ -246,6 +247,7 @@ def normalize_and_score(product_payload: dict[str, Any], policy_result: PolicyTo
     return NormalizedScoreResult(
         spoken_summary_de=verdict_de,
         spoken_summary_en=verdict_en,
+        policy_version=policy_result.policy_version,
         grade_or_tier=tier,
         confidence=confidence,
         warnings=warnings,

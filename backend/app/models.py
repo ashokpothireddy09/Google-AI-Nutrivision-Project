@@ -41,6 +41,7 @@ class HudUpdateEvent(BaseModel):
     session_id: str
     turn_id: str
     domain: DomainType
+    policy_version: str = "v1"
     product_identity: ProductIdentity
     grade_or_tier: str
     warnings: list[WarningItem]
@@ -101,6 +102,7 @@ class PolicyToolResult(BaseModel):
 class NormalizedScoreResult(BaseModel):
     spoken_summary_de: str
     spoken_summary_en: str
+    policy_version: str
     grade_or_tier: str
     confidence: float
     warnings: list[WarningItem]
