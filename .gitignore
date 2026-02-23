@@ -16,3 +16,6 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 *.pyo
+.venv/
+backend/.venv/
+backend/.pytest_cache/

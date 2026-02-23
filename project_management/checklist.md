@@ -72,7 +72,7 @@ Use this as a gate-based checklist. A gate closes only when all mandatory items 
 - [x] `get_product_by_barcode` implemented (`backend/app/tools.py`).
 - [x] `search_product_catalog` fallback implemented (`backend/app/tools.py`).
 - [x] Confidence score included in result payload.
-- [ ] Disambiguation question path implemented for close candidates.
+- [x] Disambiguation question path implemented for close candidates.
 - [ ] Demo product list identification success rate meets target.
 
 ## Gate 4 - Scoring and Policy Correctness

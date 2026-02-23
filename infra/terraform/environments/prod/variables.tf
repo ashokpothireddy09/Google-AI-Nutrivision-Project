@@ -60,7 +60,7 @@ variable "backend_service_name" {
 variable "backend_timeout_seconds" {
   description = "Request timeout for backend Cloud Run service"
   type        = number
-  default     = 60
+  default     = 3600
 }
 
 variable "enable_cloud_sql_postgres" {
@@ -130,6 +130,18 @@ variable "secret_names" {
   description = "Set of Secret Manager secret IDs to create"
   type        = set(string)
   default     = []
+}
+
+variable "secret_payloads" {
+  description = "Optional map of secret_id => secret value to create secret versions during apply"
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+
+  validation {
+    condition     = alltrue([for secret_name in keys(var.secret_payloads) : contains(var.secret_names, secret_name)])
+    error_message = "All secret_payloads keys must also be present in secret_names."
+  }
 }
 
 variable "sql_database_version" {

@@ -11,7 +11,7 @@ This file captures your finalized decisions and remaining blockers.
 
 ## B) Scope Decisions
 
-- Cosmetics in MVP: Yes
+- Cosmetics in MVP: No (Food MVP mandatory; cosmetics shown as controlled Beta)
 - Cosmetics depth: Basic
 - Basic cosmetics scope definition:
   - Parse INCI (OBF or OCR fallback)
@@ -36,9 +36,9 @@ This file captures your finalized decisions and remaining blockers.
 
 ## C) Stack and Platform Decisions
 
-- Frontend stack: React (Vite)
+- Frontend stack: React (Vite), mobile-first web app
 - Backend stack: Python 3.11 + FastAPI (WebSocket proxy)
-- SDK preference: ADK
+- SDK preference: Google GenAI SDK (ADK optional future migration)
 - Cloud services: Cloud Run + Vertex AI (Gemini Live) + Secret Manager
 - Optional cloud service: Memorystore (Redis)
 - Preferred region: europe-west3

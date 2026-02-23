@@ -36,9 +36,10 @@ module "artifact_registry" {
 module "secret_manager" {
   source = "../../modules/secret_manager"
 
-  labels       = local.labels
-  project_id   = var.project_id
-  secret_names = var.secret_names
+  labels          = local.labels
+  project_id      = var.project_id
+  secret_payloads = var.secret_payloads
+  secret_names    = var.secret_names
 
   depends_on = [module.project_apis]
 }

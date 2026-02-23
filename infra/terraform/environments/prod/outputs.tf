@@ -38,6 +38,12 @@ output "secret_ids" {
   value       = module.secret_manager.secret_ids
 }
 
+output "secret_version_ids" {
+  description = "Secret Manager secret versions created via secret_payloads"
+  value       = module.secret_manager.secret_version_ids
+  sensitive   = true
+}
+
 output "sql_connection_name" {
   description = "Optional Cloud SQL connection name"
   value       = module.cloud_sql_postgres.connection_name
