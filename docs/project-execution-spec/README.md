@@ -2,6 +2,10 @@
 
 Purpose: Convert existing requirement drafts into a spec-driven, execution-ready package to finish the project with clear scope, acceptance criteria, plan, checklists, and dependency intake.
 
+Status:
+- Primary day-to-day execution tracking is in `project_management/`.
+- This folder remains a structured spec reference pack and template source.
+
 ## Files in this folder
 
 1. `00_master_spec.md`
