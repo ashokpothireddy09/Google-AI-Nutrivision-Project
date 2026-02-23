@@ -16,7 +16,7 @@ This plan is corrected and aligned to the requirement sources in `docs/requireme
 
 - Hard deadline: Tuesday, 17 March 2026 @ 01:00 (CET, Europe/Berlin)
 - Review/approval owner: Ashok Pothireddy
-- GCP project ID: nutrivision-liveagent-2026
+- GCP project ID: light-client-488312-r3
 - Frontend: React (Vite)
 - Backend: Python 3.11 + FastAPI
 - SDK: ADK

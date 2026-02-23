@@ -45,7 +45,7 @@ This file captures your finalized decisions and remaining blockers.
 
 ## D) Cloud Access and Security
 
-- GCP Project ID: nutrivision-liveagent-2026
+- GCP Project ID (canonical, current deployment): light-client-488312-r3
 - IAM level available: Owner OR Editor + IAM Admin (preferred)
 - Can enable services and create service accounts: Yes
 - Secret strategy approved: Yes
