@@ -58,7 +58,7 @@ Expected success:
 cd backend
 source .venv/bin/activate
 export GEMINI_USE_VERTEX=true
-export GCP_PROJECT_ID=nutrivision-liveagent-2026
+export GCP_PROJECT_ID=light-client-488312-r3
 export GCP_LOCATION=europe-west3
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```

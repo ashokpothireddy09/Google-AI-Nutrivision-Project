@@ -8,7 +8,7 @@
 - Backend unit tests: passing (`6 passed`).
 - Frontend + backend WebSocket contract: implemented.
 - Main blockers: full cloud runtime validation, frontend cloud hosting, submission artifacts.
-- Important alignment task: lock one canonical GCP project ID across all docs (`light-client-488312-r3` vs `nutrivision-liveagent-2026`).
+- Canonical GCP project ID aligned in docs: `light-client-488312-r3`.
 
 ## 2) What Is Working in Code (Verified)
 
@@ -212,7 +212,6 @@ Expected response:
 
 1. Implement real Gemini live audio output streaming (backend -> frontend audio), replacing browser-only TTS fallback as primary path.
 
-### Alignment risk to resolve now
+### Alignment status
 
-1. Lock one canonical GCP project ID across all docs and commands:
-   - currently mixed references: `light-client-488312-r3` and `nutrivision-liveagent-2026`.
+1. Project ID references were normalized to `light-client-488312-r3` in active execution docs.

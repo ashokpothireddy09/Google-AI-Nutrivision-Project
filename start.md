@@ -4,25 +4,37 @@ This file tells you exactly what to read and how to start this project.
 
 ## 1) Read These Files First (In Order)
 
-1. `project_management/requirements_from_user.md`
+1. `project_management/README.md`
+- Navigation index for all execution/management docs.
+
+2. `docs/README.md`
+- Navigation index for all documentation sections.
+
+3. `project_management/requirements_from_user.md`
 - Source of truth for locked decisions (scope, stack, deadline, products, targets).
 
-2. `project_management/plan.md`
+4. `project_management/status.md`
+- Current state, what was done, what is pending, exact next steps.
+
+5. `project_management/checklist.md`
+- Operational gate checklist to track progress and completion.
+
+6. `project_management/plan.md`
 - Execution phases, gate logic, API enablement, Terraform plan.
 
-3. `project_management/checklist.md`
-- Operational checklist to track progress and completion.
-
-4. `docs/project-execution-spec/00_master_spec.md`
-- Requirement IDs, acceptance gates, risk controls.
-
-5. `docs/project-execution-spec/02_technical_spec.md`
-- Technical contracts: tools, scoring, event schemas, testing matrix.
-
-6. `project_management/hackathon-absolute-requirements.md`
+7. `project_management/hackathon-absolute-requirements.md`
 - Hackathon requirements, we need to follow, otherwise this project is a trash material
 
-7. `docs/terraform-deployment.md`
+8. `docs/requirements/README.md`
+- Requirement baselines index (business + UX + technical).
+
+9. `docs/project-execution-spec/README.md`
+- Spec pack and template references.
+
+10. `docs/testing/README.md`
+- Test guide index (backend + frontend + terraform).
+
+11. `docs/terraform-deployment.md`
 - Simple Terraform deployment guide (resources, secrets, configuration, and command order).
 
 ## 2) Project Status Snapshot
@@ -145,7 +157,7 @@ pip install -r requirements.txt
 #
 # Option B (Vertex mode):
 export GEMINI_USE_VERTEX=true
-export GCP_PROJECT_ID=nutrivision-liveagent-2026
+export GCP_PROJECT_ID=light-client-488312-r3
 export GCP_LOCATION=europe-west3
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```

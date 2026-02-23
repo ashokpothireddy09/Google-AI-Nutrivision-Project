@@ -28,7 +28,7 @@ Use this as a gate-based checklist. A gate closes only when all mandatory items 
 
 ## Gate 1 - Cloud and Runtime Foundation
 
-- [x] GCP project selected and access verified (`nutrivision-liveagent-2026`).
+- [x] GCP project selected and access verified (`light-client-488312-r3`).
 - [ ] Required cloud services enabled (Cloud Run, Vertex AI, Secret Manager).
 - [ ] Core APIs enabled:
   - [ ] `aiplatform.googleapis.com`
@@ -87,9 +87,9 @@ Use this as a gate-based checklist. A gate closes only when all mandatory items 
   - [x] uncertain
 - [ ] Food score components validated with test dataset.
 - [ ] Cosmetics safety tier components validated with test dataset.
-- [ ] Date interpretation logic validated:
-  - [ ] MHD path
-  - [ ] use-by path
+- [x] Date interpretation logic validated:
+  - [x] MHD path
+  - [x] use-by path
 
 ## Gate 5 - UX and Explainability
 
@@ -102,7 +102,7 @@ Use this as a gate-based checklist. A gate closes only when all mandatory items 
 
 ## Gate 6 - Quality and Reliability
 
-- [ ] Unit tests pass for scoring/policy/date logic.
+- [x] Unit tests pass for scoring/policy/date logic.
 - [ ] Contract tests pass for tool input/output schema.
 - [ ] Integration tests pass for barcode and fallback flows.
 - [ ] Timeout and source-failure fallback behavior tested.
