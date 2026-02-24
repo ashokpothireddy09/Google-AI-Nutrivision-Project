@@ -33,6 +33,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Geist, "Segoe UI", sans-serif;
+  overflow-y: auto;
 }
 
 a {
@@ -42,6 +43,7 @@ a {
 
 .nv-app {
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(1000px 620px at 10% -18%, rgba(45, 213, 222, 0.09), transparent 65%),
     radial-gradient(900px 580px at 85% -15%, rgba(102, 136, 175, 0.12), transparent 65%),
@@ -223,6 +225,7 @@ a {
   position: absolute;
   inset: 0;
   background: radial-gradient(circle at center, #0f1b2b 0%, #070d17 78%);
+  pointer-events: none;
 }
 
 .nv-camera-grid {
@@ -233,6 +236,7 @@ a {
   background-image:
     linear-gradient(to right, rgba(45, 213, 222, 0.52) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(45, 213, 222, 0.52) 1px, transparent 1px);
+  pointer-events: none;
 }
 
 .nv-hud-top {
@@ -311,6 +315,7 @@ a {
   z-index: 2;
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 
 .nv-reticle {
