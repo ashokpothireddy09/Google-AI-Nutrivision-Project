@@ -7,6 +7,7 @@ crash.log
 # Frontend build artifacts
 frontend/node_modules/
 frontend/dist/
+UI/
 
 # OS/editor noise
 .DS_Store
