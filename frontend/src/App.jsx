@@ -1,23 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  AudioLines,
+  Brain,
   Camera,
+  CheckCircle2,
+  ChevronDown,
   Circle,
+  Cloud,
+  CloudCog,
+  Cpu,
   Eye,
+  FlaskConical,
   Github,
+  HelpCircle,
   Info,
+  LayoutDashboard,
+  Layers,
+  Lock,
   Mic,
   MicOff,
   Play,
+  Scale,
+  Scan,
   ScanLine,
   SendHorizonal,
   Shield,
-  Volume2,
-  CheckCircle2,
   ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+  Volume2,
   XCircle,
-  HelpCircle,
-  AudioLines
+  Zap
 } from "lucide-react";
 
 const DEMO_PRODUCTS = [
@@ -65,6 +79,104 @@ const DEMO_PRODUCTS = [
       "This face cream contains a flagged fragrance allergen and a harsh surfactant. Individuals with sensitive skin should patch-test first.",
     warnings: ["Fragrance allergen", "Surfactant flag"],
     latency: "2.8s"
+  }
+];
+
+const STACK_ITEMS = [
+  { icon: Cpu, label: "Gemini Multimodal", sublabel: "Live Agent" },
+  { icon: CloudCog, label: "Google Cloud Run", sublabel: "Backend" },
+  { icon: Layers, label: "GenAI SDK", sublabel: "Streaming" },
+  { icon: Smartphone, label: "Mobile-First", sublabel: "PWA" }
+];
+
+const FEATURE_ITEMS = [
+  {
+    icon: Scan,
+    title: "Barcode-First ID",
+    description: "Instant product identification with fallback to visual search.",
+    stat: "1.5s",
+    statLabel: "latency"
+  },
+  {
+    icon: Mic,
+    title: "Voice Interaction",
+    description: "Interruptible spoken verdicts with natural follow-ups.",
+    stat: "300ms",
+    statLabel: "barge-in"
+  },
+  {
+    icon: Eye,
+    title: "HUD Overlay",
+    description: "Warning chips and 4-bar analysis in live camera view.",
+    stat: "4-bar",
+    statLabel: "analysis"
+  },
+  {
+    icon: Zap,
+    title: "Live Agent",
+    description: "Gemini multimodal AI for context-aware product guidance.",
+    stat: "Live",
+    statLabel: "streaming"
+  },
+  {
+    icon: ShieldCheck,
+    title: "Allergen Alerts",
+    description: "Conservative warnings for allergens and restricted ingredients.",
+    stat: "5-tier",
+    statLabel: "verdicts"
+  },
+  {
+    icon: FlaskConical,
+    title: "Cosmetics Beta",
+    description: "INCI parsing, allergen flags, and surfactant checks.",
+    stat: "Beta",
+    statLabel: "expanding"
+  }
+];
+
+const HOW_STEPS = [
+  {
+    icon: Camera,
+    title: "Point & Scan",
+    description: "Aim your camera at product barcode or packaging for auto-detection."
+  },
+  {
+    icon: Brain,
+    title: "AI Identifies",
+    description: "Gemini processes image and retrieves grounded ingredient signals."
+  },
+  {
+    icon: AudioLines,
+    title: "Spoken Verdict",
+    description: "Get concise spoken assessment and interrupt for follow-up questions."
+  },
+  {
+    icon: LayoutDashboard,
+    title: "HUD Analysis",
+    description: "Warnings and bar analysis stay overlaid in real time."
+  }
+];
+
+const TRUST_PILLARS = [
+  {
+    icon: ShieldCheck,
+    title: "Medical Phrasing",
+    description: "Clear informational guidance, distinct from medical advice."
+  },
+  {
+    icon: Scale,
+    title: "5-Tier Classification",
+    description: "Authorized, restricted, warning, not authorized, or uncertain."
+  },
+  {
+    icon: Cloud,
+    title: "Cloud-Native",
+    description: "Google Cloud Run backend with Gemini multimodal processing."
+  },
+  {
+    icon: Lock,
+    title: "Privacy First",
+    description: "Real-time camera processing flow; no feed persistence by design."
   }
 ];
 
@@ -701,7 +813,7 @@ export default function App() {
         <nav className="nv-nav-links">
           <a href="#scanner">Scanner</a>
           <a href="#features">Features</a>
-          <a href="#workflow">How It Works</a>
+          <a href="#how-it-works">How It Works</a>
           <a href="#trust">Trust</a>
         </nav>
 
@@ -710,10 +822,21 @@ export default function App() {
             <Github size={13} />
             Repo
           </a>
-          <a href="#" className="nv-btn nv-btn-primary">
+          <a href="#demo" className="nv-btn nv-btn-primary">
             <Play size={12} />
             Demo
           </a>
+          <select value={language} onChange={(event) => setLanguage(event.target.value)} className="nv-select">
+            <option value="de">DE</option>
+            <option value="en">EN</option>
+          </select>
+          <select value={domain} onChange={(event) => setDomain(event.target.value)} className="nv-select">
+            <option value="food">Food</option>
+            <option value="beauty">Cosmetics</option>
+          </select>
+          <span className={`nv-status ${wsStatus === "connected" ? "is-on" : ""}`}>
+            {wsStatus === "connected" ? "ONLINE" : "OFFLINE"}
+          </span>
         </div>
       </header>
 
@@ -746,7 +869,7 @@ export default function App() {
 
                   <span className="nv-listen-pill">
                     <AudioLines size={11} />
-                    {voiceListening ? "Listening" : "Mic muted"}
+                    {voiceListening ? "Listening" : "Muted"}
                   </span>
                 </div>
               </div>
@@ -924,6 +1047,124 @@ export default function App() {
           </aside>
         </section>
       </main>
+
+      <div className="nv-scroll-hint">
+        <ChevronDown size={16} />
+      </div>
+
+      <section className="nv-tech-strip">
+        <div className="nv-shell nv-tech-grid">
+          {STACK_ITEMS.map((item) => (
+            <div key={item.label} className="nv-tech-item">
+              <item.icon size={15} />
+              <div>
+                <p>{item.label}</p>
+                <small>{item.sublabel}</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="features" className="nv-section">
+        <div className="nv-shell">
+          <div className="nv-section-head">
+            <span>Capabilities</span>
+            <h2>Precision Instrument for Everyday Decisions</h2>
+          </div>
+          <div className="nv-feature-grid">
+            {FEATURE_ITEMS.map((feature) => (
+              <article key={feature.title} className="nv-feature-card">
+                <div className="nv-feature-top">
+                  <div className="nv-feature-icon">
+                    <feature.icon size={15} />
+                  </div>
+                  <div className="nv-feature-stat">
+                    <strong>{feature.stat}</strong>
+                    <small>{feature.statLabel}</small>
+                  </div>
+                </div>
+                <h3>{feature.title}</h3>
+                <p>{feature.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" className="nv-section">
+        <div className="nv-shell">
+          <div className="nv-section-head">
+            <span>Workflow</span>
+            <h2>Scan to Verdict in Under Two Seconds</h2>
+          </div>
+          <div className="nv-steps-grid">
+            {HOW_STEPS.map((step) => (
+              <article key={step.title} className="nv-step-card">
+                <div className="nv-step-icon">
+                  <step.icon size={15} />
+                </div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="trust" className="nv-section">
+        <div className="nv-shell">
+          <div className="nv-section-head">
+            <span>Trust & Compliance</span>
+            <h2>Built on Transparency</h2>
+          </div>
+          <div className="nv-trust-grid">
+            {TRUST_PILLARS.map((pillar) => (
+              <article key={pillar.title} className="nv-trust-card">
+                <div className="nv-trust-icon">
+                  <pillar.icon size={15} />
+                </div>
+                <div>
+                  <h3>{pillar.title}</h3>
+                  <p>{pillar.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="demo" className="nv-section nv-cta">
+        <div className="nv-shell nv-cta-shell">
+          <span className="nv-pill">Hackathon Submission</span>
+          <h2>Watch the Live Demo</h2>
+          <p>
+            See NutriVision analyze products in real-time: barcode, voice interaction, and HUD overlay.
+          </p>
+          <div className="nv-cta-actions">
+            <a href="#" className="nv-btn nv-btn-primary">
+              <Play size={14} />
+              Watch Demo Video
+            </a>
+            <a href="#" className="nv-btn nv-btn-dark">
+              <Github size={14} />
+              View Repository
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <footer className="nv-footer">
+        <div className="nv-shell nv-footer-inner">
+          <div className="nv-brand">
+            <div className="nv-logo-box">
+              <Eye size={12} />
+            </div>
+            <span className="nv-brand-name">NutriVision</span>
+          </div>
+          <p>Built for the Gemini Live Agent Challenge · Powered by Google Cloud</p>
+        </div>
+      </footer>
     </div>
   );
 }
