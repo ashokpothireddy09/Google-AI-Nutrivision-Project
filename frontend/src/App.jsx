@@ -2,60 +2,194 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   AudioLines,
+  Brain,
   Camera,
+  CheckCircle2,
+  ChevronDown,
   Circle,
+  Cloud,
+  CloudCog,
+  Cpu,
   Eye,
+  FlaskConical,
   Github,
-  Globe,
+  HelpCircle,
   Info,
+  LayoutDashboard,
+  Layers,
+  Lock,
   Mic,
   MicOff,
   Play,
+  Scale,
+  Scan,
   ScanLine,
   SendHorizonal,
   Shield,
-  Volume2
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+  Volume2,
+  XCircle,
+  Zap
 } from "lucide-react";
 
 const DEMO_PRODUCTS = [
   {
     name: "Organic Oat Cereal",
     category: "Food",
+    verdict: "authorized",
     bars: [
-      { label: "Metrik 1", value: 88 },
-      { label: "Metrik 2", value: 95 },
-      { label: "Metrik 3", value: 72 },
-      { label: "Metrik 4", value: 65 }
+      { label: "Nutrition", value: 88 },
+      { label: "Additives", value: 95 },
+      { label: "Processing", value: 72 },
+      { label: "Allergens", value: 65 }
     ],
     spokenVerdict:
       "This organic oat cereal has a strong nutritional profile with minimal additives. Note: contains gluten. Suitable for most diets.",
-    warnings: ["Gluten present", "High fiber"]
+    warnings: ["Gluten present", "High fiber"],
+    latency: "1.2s"
   },
   {
     name: "Berry Energy Drink",
     category: "Food",
+    verdict: "warning_required",
     bars: [
-      { label: "Metrik 1", value: 35 },
-      { label: "Metrik 2", value: 42 },
-      { label: "Metrik 3", value: 29 },
-      { label: "Metrik 4", value: 84 }
+      { label: "Nutrition", value: 35 },
+      { label: "Additives", value: 40 },
+      { label: "Processing", value: 25 },
+      { label: "Allergens", value: 90 }
     ],
     spokenVerdict:
       "Warning: high caffeine, artificial colorings, and significant added sugars. Not recommended for children or caffeine-sensitive individuals.",
-    warnings: ["High caffeine", "Artificial colors"]
+    warnings: ["High caffeine", "Artificial colors", "Added sugars"],
+    latency: "1.4s"
   },
   {
     name: "Gentle Face Cream",
     category: "Cosmetics (Beta)",
+    verdict: "restricted",
     bars: [
-      { label: "Metrik 1", value: 71 },
-      { label: "Metrik 2", value: 52 },
-      { label: "Metrik 3", value: 43 },
-      { label: "Metrik 4", value: 79 }
+      { label: "Safety", value: 70 },
+      { label: "INCI", value: 55 },
+      { label: "Allergens", value: 45 },
+      { label: "Eco", value: 80 }
     ],
     spokenVerdict:
       "This face cream contains a flagged fragrance allergen and a harsh surfactant. Individuals with sensitive skin should patch-test first.",
-    warnings: ["Fragrance allergen", "Surfactant flag"]
+    warnings: ["Fragrance allergen", "Surfactant flag"],
+    latency: "2.8s"
+  }
+];
+
+const STACK_ITEMS = [
+  { icon: Cpu, label: "Gemini Multimodal", sublabel: "Live Agent" },
+  { icon: CloudCog, label: "Google Cloud Run", sublabel: "Backend" },
+  { icon: Layers, label: "GenAI SDK", sublabel: "Streaming" },
+  { icon: Smartphone, label: "Mobile-First", sublabel: "PWA" }
+];
+
+const FEATURE_ITEMS = [
+  {
+    icon: Scan,
+    title: "Barcode-First ID",
+    description:
+      "Instant product identification with intelligent fallback to visual search.",
+    stat: "1.5s",
+    statLabel: "latency"
+  },
+  {
+    icon: Mic,
+    title: "Voice Interaction",
+    description:
+      "Zero-typing interface with interruptible spoken verdicts and natural follow-ups.",
+    stat: "300ms",
+    statLabel: "barge-in"
+  },
+  {
+    icon: Eye,
+    title: "HUD Overlay",
+    description: "Warning chips and 4-bar analysis in live camera view.",
+    stat: "4-bar",
+    statLabel: "analysis"
+  },
+  {
+    icon: Zap,
+    title: "Live Agent",
+    description:
+      "Gemini multimodal AI for real-time, context-aware product guidance.",
+    stat: "Live",
+    statLabel: "streaming"
+  },
+  {
+    icon: ShieldCheck,
+    title: "Allergen Alerts",
+    description:
+      "Conservative, medically-phrased warnings for allergens and restricted ingredients.",
+    stat: "5-tier",
+    statLabel: "verdicts"
+  },
+  {
+    icon: FlaskConical,
+    title: "Cosmetics Beta",
+    description:
+      "INCI parsing, fragrance allergen flags, surfactant and microplastics screening.",
+    stat: "Beta",
+    statLabel: "expanding"
+  }
+];
+
+const HOW_STEPS = [
+  {
+    icon: Scan,
+    title: "Point & Scan",
+    description:
+      "Aim your camera at any product barcode or packaging. Auto-detection in under a second."
+  },
+  {
+    icon: Brain,
+    title: "AI Identifies",
+    description:
+      "Gemini processes the image, identifies the product, and retrieves grounded ingredient data."
+  },
+  {
+    icon: AudioLines,
+    title: "Spoken Verdict",
+    description:
+      "Receive a concise 2-3 sentence spoken assessment. Interrupt anytime with follow-ups."
+  },
+  {
+    icon: LayoutDashboard,
+    title: "HUD Analysis",
+    description:
+      "Warning chips and 4-bar analysis overlay in real-time for a complete health snapshot."
+  }
+];
+
+const TRUST_PILLARS = [
+  {
+    icon: ShieldCheck,
+    title: "Medical Phrasing",
+    description:
+      "Conservative, medically-responsible language. Clear distinction between informational guidance and medical advice."
+  },
+  {
+    icon: Scale,
+    title: "5-Tier Classification",
+    description:
+      "Authorized, restricted, warning required, not authorized, or uncertain. Never ambiguous."
+  },
+  {
+    icon: Cloud,
+    title: "Cloud-Native",
+    description:
+      "Google Cloud Run for production-grade reliability, Gemini multimodal AI powering every analysis."
+  },
+  {
+    icon: Lock,
+    title: "Privacy First",
+    description:
+      "Camera feeds processed in real-time and never stored. Shopping data stays on your device."
   }
 ];
 
@@ -71,6 +205,14 @@ const INITIAL_HUD = {
   metrics: [],
   data_sources: [],
   explanation_bullets: []
+};
+
+const VERDICT_MAP = {
+  authorized: { label: "AUTHORIZED", icon: CheckCircle2, tone: "ok" },
+  warning_required: { label: "WARNING", icon: AlertTriangle, tone: "warn" },
+  restricted: { label: "RESTRICTED", icon: ShieldAlert, tone: "warn" },
+  not_authorized: { label: "NOT AUTHORIZED", icon: XCircle, tone: "bad" },
+  uncertain: { label: "UNCERTAIN", icon: HelpCircle, tone: "muted" }
 };
 
 function formatClock() {
@@ -91,10 +233,6 @@ function scoreTone(score) {
   if (score >= 50) return "score-mid";
   if (score >= 35) return "score-low";
   return "score-bad";
-}
-
-function userLanguageLabel(lang) {
-  return lang === "de" ? "DE" : "EN";
 }
 
 function SendIcon() {
@@ -129,6 +267,7 @@ export default function App() {
   const [voiceListening, setVoiceListening] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [landingWindowOpen, setLandingWindowOpen] = useState(true);
   const [events, setEvents] = useState([
     {
       id: 1,
@@ -144,7 +283,7 @@ export default function App() {
   const metricRows = useMemo(() => {
     const rows = Array.isArray(hud.metrics)
       ? hud.metrics.slice(0, 4).map((metric, index) => ({
-          label: metric.name || `Metrik ${index + 1}`,
+          label: metric.name || `Metric ${index + 1}`,
           score: Math.max(0, Math.min(100, Number(metric.score || 0))),
           value: metric.value ?? "-"
         }))
@@ -152,7 +291,7 @@ export default function App() {
 
     while (rows.length < 4) {
       rows.push({
-        label: `Metrik ${rows.length + 1}`,
+        label: `Metric ${rows.length + 1}`,
         score: 0,
         value: "-"
       });
@@ -164,34 +303,36 @@ export default function App() {
   const analysisRows = hasLiveHud
     ? metricRows
     : selectedDemo.bars.map((bar, index) => ({
-        label: bar.label || `Metrik ${index + 1}`,
+        label: bar.label || `Metric ${index + 1}`,
         score: bar.value,
         value: "-"
       }));
 
-  const speechPanelText =
-    spokenText ||
-    (sessionLive ? "Live-Antwort wird verarbeitet..." : "Scan starten fuer Live-Verlauf");
-
   const warningRows = hasLiveHud
     ? (hud.warnings || []).map((warning) => warning.label).filter(Boolean)
-    : [];
+    : selectedDemo.warnings;
 
-  const warningText = warningRows.length > 0 ? warningRows.join(" | ") : "Keine Warnungen erkannt";
+  const speechPanelText =
+    spokenText ||
+    (sessionLive
+      ? "Live response is being processed..."
+      : selectedDemo.spokenVerdict);
 
   const musicBlocked =
-    !audioUnlocked || !sessionLive || agentState === "speaking" || agentState === "processing";
+    !audioUnlocked ||
+    agentState === "speaking" ||
+    agentState === "processing" ||
+    (!landingWindowOpen && !sessionLive);
 
-  const checklist = [
-    { label: "Live Session", value: sessionLive ? "ACTIVE" : "OFFLINE", ok: sessionLive },
-    { label: "Backend Uplink", value: wsStatus.toUpperCase(), ok: wsStatus === "connected" },
-    { label: "Voice Input", value: voiceSupported ? "READY" : "UNSUPPORTED", ok: voiceSupported },
-    {
-      label: "Ambient Audio",
-      value: !musicBlocked ? "PLAYING" : "PAUSED",
-      ok: !musicBlocked
-    }
-  ];
+  const activeVerdict = VERDICT_MAP[selectedDemo.verdict] || VERDICT_MAP.uncertain;
+  const VerdictIcon = activeVerdict.icon;
+
+  const statusText =
+    appMode === "analyzing" || agentState === "processing"
+      ? "ANALYZING"
+      : sessionLive
+        ? "COMPLETE"
+        : "READY";
 
   const pushEvent = (de, en) => {
     eventId.current += 1;
@@ -579,7 +720,7 @@ export default function App() {
       if (!transcript) return;
       setQueryText(transcript);
       sendQuery(transcript);
-      pushEvent(`Audio decodiert: ${transcript}`, `Audio decoded: ${transcript}`);
+      pushEvent(`Audio decoded: ${transcript}`, `Audio decoded: ${transcript}`);
     };
 
     speechRecognitionRef.current = recognition;
@@ -606,6 +747,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    const landingTimer = window.setTimeout(() => {
+      setLandingWindowOpen(false);
+    }, 10000);
+
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     setVoiceSupported(Boolean(SpeechRecognitionCtor));
 
@@ -635,6 +780,7 @@ export default function App() {
     window.addEventListener("touchstart", unlockAudio);
 
     return () => {
+      window.clearTimeout(landingTimer);
       stopCamera();
       closeSocket();
       if (speechRecognitionRef.current) speechRecognitionRef.current.stop();
@@ -676,62 +822,48 @@ export default function App() {
   }, [hasLiveHud, hud.product_identity?.name, demoIndex]);
 
   return (
-    <div className="nv-app anim-focus">
+    <div className="nv-app">
+      <div id="nv-intro">
+        <div className="intro-text">&gt; SENSOR_ALIGNMENT_COMPLETE</div>
+        <div className="intro-laser" />
+      </div>
+
       <header className="nv-topbar anim-slide-up d-1">
         <div className="nv-brand">
           <div className="nv-logo-box">
-            <Camera size={14} />
+            <Eye size={13} />
           </div>
-          <div className="nv-brand-copy">
-            <p className="nv-kicker">NUTRIVISION LIVE AGENT</p>
-            <p className="nv-title">Realtime Copilot Console</p>
-          </div>
+          <span className="nv-brand-name">NutriVision</span>
+          <span className="nv-badge">Gemini Live Agent</span>
         </div>
 
         <nav className="nv-nav-links">
           <a href="#scanner">Scanner</a>
           <a href="#features">Features</a>
-          <a href="#workflow">How It Works</a>
+          <a href="#how-it-works">How It Works</a>
           <a href="#trust">Trust</a>
         </nav>
 
         <div className="nv-actions">
           <a href="#" className="nv-btn nv-btn-dark">
-            <Github size={14} />
+            <Github size={13} />
             Repo
           </a>
           <a href="#demo" className="nv-btn nv-btn-primary">
-            <Play size={14} />
+            <Play size={12} />
             Demo
           </a>
-
-          <div className="nv-select-wrap">
-            <Globe size={13} />
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value)}
-              aria-label="Language"
-            >
-              <option value="de">{userLanguageLabel("de")}</option>
-              <option value="en">{userLanguageLabel("en")}</option>
-            </select>
-          </div>
-
-          <div className="nv-select-wrap nv-domain">
-            <AudioLines size={13} />
-            <select
-              value={domain}
-              onChange={(event) => setDomain(event.target.value)}
-              aria-label="Domain"
-            >
-              <option value="food">Food</option>
-              <option value="beauty">Cosmetics</option>
-            </select>
-          </div>
-
-          <div className={`nv-status-badge ${wsStatus === "connected" ? "is-online" : "is-offline"}`}>
+          <select value={language} onChange={(event) => setLanguage(event.target.value)} className="nv-select">
+            <option value="de">DE</option>
+            <option value="en">EN</option>
+          </select>
+          <select value={domain} onChange={(event) => setDomain(event.target.value)} className="nv-select">
+            <option value="food">Food</option>
+            <option value="beauty">Cosmetics</option>
+          </select>
+          <span className={`nv-status ${wsStatus === "connected" ? "is-on" : ""}`}>
             {wsStatus === "connected" ? "ONLINE" : "OFFLINE"}
-          </div>
+          </span>
         </div>
       </header>
 
@@ -745,19 +877,73 @@ export default function App() {
               <div className="nv-camera-overlay" />
               <div className="nv-camera-grid" />
 
+              <div className="nv-hud-top">
+                <div className="nv-state-pill">
+                  <span className="nv-dot" />
+                  {statusText}
+                </div>
+
+                <div className="nv-hud-right">
+                  <button
+                    type="button"
+                    className={`nv-hud-btn ${voiceListening ? "is-active" : ""}`}
+                    onClick={toggleVoiceInput}
+                    disabled={!voiceSupported}
+                    title="Voice input"
+                  >
+                    {voiceListening ? <Mic size={13} /> : <MicOff size={13} />}
+                  </button>
+
+                  <span className="nv-listen-pill">
+                    <AudioLines size={11} />
+                    {voiceListening ? "Listening" : "Muted"}
+                  </span>
+                </div>
+              </div>
+
               <div className="nv-center-lockup">
                 <div className="nv-reticle">
-                  <ScanLine size={20} />
+                  <ScanLine size={18} />
                 </div>
-                <p>{sessionLive ? "LIVE UPLINK" : "KAMERA OFFLINE"}</p>
-                <button
-                  type="button"
-                  className="nv-session-btn"
-                  onClick={sessionLive ? stopSession : startSession}
-                >
-                  <Play size={14} />
-                  {sessionLive ? "SESSION STOPPEN" : "SESSION STARTEN"}
-                </button>
+              </div>
+
+              <div className="nv-bottom-panel">
+                <div className="nv-product-line">
+                  <span className={`nv-verdict nv-${activeVerdict.tone}`}>
+                    <VerdictIcon size={12} />
+                    {activeVerdict.label}
+                  </span>
+                  <span className="nv-product-name">
+                    {hasLiveHud ? hud.product_identity?.name || selectedDemo.name : selectedDemo.name}
+                  </span>
+                  <span className="nv-latency">{selectedDemo.latency}</span>
+                </div>
+
+                <div className="nv-analysis-grid">
+                  {analysisRows.map((row, index) => (
+                    <div key={`${row.label}-${index}`} className="nv-analysis-item">
+                      <div className="nv-analysis-head">
+                        <span>{row.label}</span>
+                        <strong>{Math.round(row.score)}%</strong>
+                      </div>
+                      <div className="nv-progress">
+                        <i
+                          className={`nv-progress-bar ${scoreTone(row.score)} bar-${(index % 4) + 1}`}
+                          style={{ "--target-width": `${Math.max(3, row.score)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="nv-warning-tags">
+                  {warningRows.slice(0, 4).map((warning) => (
+                    <span key={warning}>
+                      <AlertTriangle size={11} />
+                      {warning}
+                    </span>
+                  ))}
+                </div>
               </div>
             </article>
 
@@ -784,22 +970,21 @@ export default function App() {
 
               <button
                 type="button"
-                className={`nv-icon-btn ${voiceListening ? "is-active" : ""}`}
-                onClick={toggleVoiceInput}
-                disabled={!voiceSupported}
-                title="Voice input"
-              >
-                {voiceListening ? <Mic size={14} /> : <MicOff size={14} />}
-              </button>
-
-              <button
-                type="button"
                 className="nv-icon-btn"
                 onClick={triggerBargeIn}
                 disabled={!sessionLive}
                 title="Barge in"
               >
-                <Circle size={14} />
+                <Circle size={13} />
+              </button>
+
+              <button
+                type="button"
+                className="nv-icon-btn"
+                onClick={sessionLive ? stopSession : startSession}
+                title={sessionLive ? "Stop session" : "Start session"}
+              >
+                <Play size={13} />
               </button>
 
               <button type="button" className="nv-send-btn" onClick={() => sendQuery()}>
@@ -810,64 +995,79 @@ export default function App() {
           </div>
 
           <aside className="nv-right-col">
-            <article className="nv-panel anim-slide-right d-2">
-              <header>
-                <span>
-                  <Volume2 size={12} />
-                  SPRACHANTWORT
-                </span>
-                <span className="nv-live-chip">LIVE</span>
-              </header>
-
-              <div className="nv-panel-blank">
-                <Eye size={20} />
-                <p>{speechPanelText}</p>
-              </div>
-
-              <footer>
-                <Info size={12} />
-                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung. Bei Allergien/Erkrankungen bitte Arzt:in fragen.
-              </footer>
-            </article>
-
-            <article className="nv-panel anim-slide-right d-3">
-              <header>
-                <span>
-                  <Shield size={12} />
-                  WARNHINWEISE
-                </span>
-              </header>
-              <div className="nv-warning-box">{warningText}</div>
-            </article>
-
             <article className="nv-panel anim-slide-right d-4">
               <header>
                 <span>
-                  <AudioLines size={12} />
-                  4-BAR ANALYSE
+                  <Camera size={12} />
+                  DEMO PRODUCTS
                 </span>
               </header>
-
-              <div className="nv-metric-list">
-                {analysisRows.map((row, index) => (
-                  <div key={`${row.label}-${index}`} className="nv-metric-row">
-                    <span>{row.label}</span>
-                    <span>{sessionLive ? `${Math.round(row.score)}%` : "-"}</span>
-                    {sessionLive && <i className={`nv-mini-bar ${scoreTone(row.score)}`} style={{ width: `${row.score}%` }} />}
-                  </div>
+              <div className="nv-product-list">
+                {DEMO_PRODUCTS.map((product, index) => (
+                  <button
+                    key={product.name}
+                    type="button"
+                    onClick={() => setDemoIndex(index)}
+                    className={`nv-product-item ${index === demoIndex ? "is-selected" : ""}`}
+                  >
+                    <div className="nv-product-icon">
+                      {product.verdict === "authorized" ? <CheckCircle2 size={13} /> : <Shield size={13} />}
+                    </div>
+                    <div>
+                      <p>{product.name}</p>
+                      <small>{product.category}</small>
+                    </div>
+                    {index === demoIndex && <i />}
+                  </button>
                 ))}
               </div>
             </article>
 
-            <article className="nv-panel nv-log-panel anim-slide-right d-5">
+            <article className="nv-panel nv-spoken-panel anim-slide-right d-5">
+              <header>
+                <span>
+                  <Volume2 size={12} />
+                  SPOKEN VERDICT
+                </span>
+                <span className="nv-live-chip">{wsStatus === "connected" ? "Live" : "Idle"}</span>
+              </header>
+
+              <div className="nv-spoken-body">
+                <p>{speechPanelText}</p>
+              </div>
+
+              <footer>
+                <Info size={11} />
+                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung.
+              </footer>
+            </article>
+
+            <article className="nv-panel nv-kpi-panel anim-slide-right d-6">
+              <div className="nv-kpi-grid">
+                <div>
+                  <strong>1.5s</strong>
+                  <span>BARCODE</span>
+                </div>
+                <div>
+                  <strong>300ms</strong>
+                  <span>BARGE-IN</span>
+                </div>
+                <div>
+                  <strong>85%+</strong>
+                  <span>ID RATE</span>
+                </div>
+              </div>
+            </article>
+
+            <article className="nv-panel nv-log-panel anim-slide-right d-6">
               <header>
                 <span>
                   <AudioLines size={12} />
-                  SYSTEMPROTOKOLL
+                  SYSTEM LOG
                 </span>
               </header>
               <div className="nv-log-body">
-                {events.slice(0, 6).map((evt) => (
+                {events.slice(0, 5).map((evt) => (
                   <p key={evt.id}>
                     [{evt.time}] <strong>{language === "de" ? evt.de : evt.en}</strong>
                   </p>
@@ -878,74 +1078,111 @@ export default function App() {
         </section>
       </main>
 
-      <section id="features" className="nv-landing reveal-up d-4">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">HACKATHON CHECKLIST</span>
-          <h2>Status & Business Requirements</h2>
-          <p>
-            Live scanner shell, multilingual interaction, spoken verdict surface, warnings, and low-volume ambient music with speaking pause.
-          </p>
+      <div className="nv-scroll-hint">
+        <ChevronDown size={16} />
+      </div>
 
-          <div className="nv-check-grid">
-            {checklist.map((item) => (
-              <article key={item.label} className="nv-check-card">
+      <section className="nv-tech-strip">
+        <div className="nv-shell nv-tech-grid">
+          {STACK_ITEMS.map((item) => (
+            <div key={item.label} className="nv-tech-item">
+              <item.icon size={15} />
+              <div>
                 <p>{item.label}</p>
-                <strong className={item.ok ? "ok" : "warn"}>{item.value}</strong>
+                <small>{item.sublabel}</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="features" className="nv-section">
+        <div className="nv-shell">
+          <div className="nv-section-head">
+            <span>Capabilities</span>
+            <h2>Precision Instrument for Everyday Decisions</h2>
+            <p>Every feature calibrated for speed, accuracy, and clarity.</p>
+          </div>
+          <div className="nv-feature-grid">
+            {FEATURE_ITEMS.map((feature) => (
+              <article key={feature.title} className="nv-feature-card">
+                <div className="nv-feature-top">
+                  <div className="nv-feature-icon">
+                    <feature.icon size={15} />
+                  </div>
+                  <div className="nv-feature-stat">
+                    <strong>{feature.stat}</strong>
+                    <small>{feature.statLabel}</small>
+                  </div>
+                </div>
+                <h3>{feature.title}</h3>
+                <p>{feature.description}</p>
               </article>
             ))}
           </div>
+        </div>
+      </section>
 
-          <div className="nv-warning-tags">
-            {(hasLiveHud ? warningRows : selectedDemo.warnings).slice(0, 3).map((warning) => (
-              <span key={warning}>
-                <AlertTriangle size={12} />
-                {warning}
-              </span>
+      <section id="how-it-works" className="nv-section">
+        <div className="nv-shell">
+          <div className="nv-section-head">
+            <span>Workflow</span>
+            <h2>Scan to Verdict in Under Two Seconds</h2>
+          </div>
+          <div className="nv-steps-grid">
+            {HOW_STEPS.map((step) => (
+              <article key={step.title} className="nv-step-card">
+                <div className="nv-step-icon">
+                  <step.icon size={15} />
+                </div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="workflow" className="nv-landing reveal-up d-5">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">WORKFLOW</span>
-          <h2>Scan to Verdict in Under Two Seconds</h2>
-          <p>
-            Camera uplink, AI identification, spoken reasoning, and warning analysis are synced for live demo scoring and business clarity.
-          </p>
-          <div className="nv-flow-grid">
-            <article>
-              <h3>1. Point & Scan</h3>
-              <p>Start session and capture barcode or product image.</p>
-            </article>
-            <article>
-              <h3>2. AI Identifies</h3>
-              <p>Multimodal backend classifies product and risk signals.</p>
-            </article>
-            <article>
-              <h3>3. Spoken Verdict</h3>
-              <p>Agent responds with concise, interruptible guidance.</p>
-            </article>
+      <section id="trust" className="nv-section">
+        <div className="nv-shell">
+          <div className="nv-section-head">
+            <span>Trust & Compliance</span>
+            <h2>Built on Transparency</h2>
           </div>
+          <div className="nv-trust-grid">
+            {TRUST_PILLARS.map((pillar) => (
+              <article key={pillar.title} className="nv-trust-card">
+                <div className="nv-trust-icon">
+                  <pillar.icon size={15} />
+                </div>
+                <div>
+                  <h3>{pillar.title}</h3>
+                  <p>{pillar.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          <article className="nv-disclaimer-card">
+            <Info size={16} />
+            <div>
+              <strong>Disclaimer</strong>
+              <p>
+                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung. Bei Allergien/Erkrankungen bitte Arzt:in fragen.
+              </p>
+              <p>
+                Notice: For informational purposes only. Not medical advice. For allergies or health conditions, please consult a physician.
+              </p>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section id="trust" className="nv-landing reveal-up d-6" aria-label="Trust section">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">TRUST</span>
-          <h2>Built for Hackathon + Real Business Use</h2>
-          <p>
-            Conservative language, transparent warnings, real-time controls, and clear audit logs for demo judges and stakeholders.
-          </p>
-        </div>
-      </section>
-
-      <section id="demo" className="nv-landing nv-cta reveal-up d-6">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">HACKATHON SUBMISSION</span>
+      <section id="demo" className="nv-section nv-cta">
+        <div className="nv-shell nv-cta-shell">
+          <span className="nv-pill">Hackathon Submission</span>
           <h2>Watch the Live Demo</h2>
           <p>
-            See NutriVision analyze products in real-time with barcode scanning, speech interaction, and HUD-style monitoring.
+            See NutriVision analyze products in real-time: barcode, voice interaction, and HUD overlay.
           </p>
           <div className="nv-cta-actions">
             <a href="#" className="nv-btn nv-btn-primary">
@@ -957,12 +1194,32 @@ export default function App() {
               View Repository
             </a>
           </div>
+          <div className="nv-cta-kpi-grid">
+            {[
+              { value: "1.5s", label: "Barcode Latency" },
+              { value: "300ms", label: "Barge-in Pivot" },
+              { value: "85%+", label: "Identification" },
+              { value: "3/3", label: "Stability Runs" }
+            ].map((kpi) => (
+              <div key={kpi.label}>
+                <strong>{kpi.value}</strong>
+                <span>{kpi.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       <footer className="nv-footer">
-        <span>NutriVision</span>
-        <span>Built for the Gemini Live Agent Challenge · Powered by Google Cloud</span>
+        <div className="nv-shell nv-footer-inner">
+          <div className="nv-brand">
+            <div className="nv-logo-box">
+              <Eye size={12} />
+            </div>
+            <span className="nv-brand-name">NutriVision</span>
+          </div>
+          <p>Built for the Gemini Live Agent Challenge · Powered by Google Cloud</p>
+        </div>
       </footer>
     </div>
   );
