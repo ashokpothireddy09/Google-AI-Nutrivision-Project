@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  AudioLines,
   Camera,
   Circle,
   Eye,
   Github,
-  Globe,
   Info,
   Mic,
   MicOff,
@@ -14,48 +12,59 @@ import {
   ScanLine,
   SendHorizonal,
   Shield,
-  Volume2
+  Volume2,
+  CheckCircle2,
+  ShieldAlert,
+  XCircle,
+  HelpCircle,
+  AudioLines
 } from "lucide-react";
 
 const DEMO_PRODUCTS = [
   {
     name: "Organic Oat Cereal",
     category: "Food",
+    verdict: "authorized",
     bars: [
-      { label: "Metrik 1", value: 88 },
-      { label: "Metrik 2", value: 95 },
-      { label: "Metrik 3", value: 72 },
-      { label: "Metrik 4", value: 65 }
+      { label: "Nutrition", value: 88 },
+      { label: "Additives", value: 95 },
+      { label: "Processing", value: 72 },
+      { label: "Allergens", value: 65 }
     ],
     spokenVerdict:
       "This organic oat cereal has a strong nutritional profile with minimal additives. Note: contains gluten. Suitable for most diets.",
-    warnings: ["Gluten present", "High fiber"]
+    warnings: ["Gluten present", "High fiber"],
+    latency: "1.2s"
   },
   {
     name: "Berry Energy Drink",
     category: "Food",
+    verdict: "warning_required",
     bars: [
-      { label: "Metrik 1", value: 35 },
-      { label: "Metrik 2", value: 42 },
-      { label: "Metrik 3", value: 29 },
-      { label: "Metrik 4", value: 84 }
+      { label: "Nutrition", value: 35 },
+      { label: "Additives", value: 40 },
+      { label: "Processing", value: 25 },
+      { label: "Allergens", value: 90 }
     ],
     spokenVerdict:
       "Warning: high caffeine, artificial colorings, and significant added sugars. Not recommended for children or caffeine-sensitive individuals.",
-    warnings: ["High caffeine", "Artificial colors"]
+    warnings: ["High caffeine", "Artificial colors", "Added sugars"],
+    latency: "1.4s"
   },
   {
     name: "Gentle Face Cream",
     category: "Cosmetics (Beta)",
+    verdict: "restricted",
     bars: [
-      { label: "Metrik 1", value: 71 },
-      { label: "Metrik 2", value: 52 },
-      { label: "Metrik 3", value: 43 },
-      { label: "Metrik 4", value: 79 }
+      { label: "Safety", value: 70 },
+      { label: "INCI", value: 55 },
+      { label: "Allergens", value: 45 },
+      { label: "Eco", value: 80 }
     ],
     spokenVerdict:
       "This face cream contains a flagged fragrance allergen and a harsh surfactant. Individuals with sensitive skin should patch-test first.",
-    warnings: ["Fragrance allergen", "Surfactant flag"]
+    warnings: ["Fragrance allergen", "Surfactant flag"],
+    latency: "2.8s"
   }
 ];
 
@@ -71,6 +80,14 @@ const INITIAL_HUD = {
   metrics: [],
   data_sources: [],
   explanation_bullets: []
+};
+
+const VERDICT_MAP = {
+  authorized: { label: "AUTHORIZED", icon: CheckCircle2, tone: "ok" },
+  warning_required: { label: "WARNING", icon: AlertTriangle, tone: "warn" },
+  restricted: { label: "RESTRICTED", icon: ShieldAlert, tone: "warn" },
+  not_authorized: { label: "NOT AUTHORIZED", icon: XCircle, tone: "bad" },
+  uncertain: { label: "UNCERTAIN", icon: HelpCircle, tone: "muted" }
 };
 
 function formatClock() {
@@ -91,10 +108,6 @@ function scoreTone(score) {
   if (score >= 50) return "score-mid";
   if (score >= 35) return "score-low";
   return "score-bad";
-}
-
-function userLanguageLabel(lang) {
-  return lang === "de" ? "DE" : "EN";
 }
 
 function SendIcon() {
@@ -144,7 +157,7 @@ export default function App() {
   const metricRows = useMemo(() => {
     const rows = Array.isArray(hud.metrics)
       ? hud.metrics.slice(0, 4).map((metric, index) => ({
-          label: metric.name || `Metrik ${index + 1}`,
+          label: metric.name || `Metric ${index + 1}`,
           score: Math.max(0, Math.min(100, Number(metric.score || 0))),
           value: metric.value ?? "-"
         }))
@@ -152,7 +165,7 @@ export default function App() {
 
     while (rows.length < 4) {
       rows.push({
-        label: `Metrik ${rows.length + 1}`,
+        label: `Metric ${rows.length + 1}`,
         score: 0,
         value: "-"
       });
@@ -164,34 +177,33 @@ export default function App() {
   const analysisRows = hasLiveHud
     ? metricRows
     : selectedDemo.bars.map((bar, index) => ({
-        label: bar.label || `Metrik ${index + 1}`,
+        label: bar.label || `Metric ${index + 1}`,
         score: bar.value,
         value: "-"
       }));
 
-  const speechPanelText =
-    spokenText ||
-    (sessionLive ? "Live-Antwort wird verarbeitet..." : "Scan starten fuer Live-Verlauf");
-
   const warningRows = hasLiveHud
     ? (hud.warnings || []).map((warning) => warning.label).filter(Boolean)
-    : [];
+    : selectedDemo.warnings;
 
-  const warningText = warningRows.length > 0 ? warningRows.join(" | ") : "Keine Warnungen erkannt";
+  const speechPanelText =
+    spokenText ||
+    (sessionLive
+      ? "Live response is being processed..."
+      : selectedDemo.spokenVerdict);
 
   const musicBlocked =
     !audioUnlocked || !sessionLive || agentState === "speaking" || agentState === "processing";
 
-  const checklist = [
-    { label: "Live Session", value: sessionLive ? "ACTIVE" : "OFFLINE", ok: sessionLive },
-    { label: "Backend Uplink", value: wsStatus.toUpperCase(), ok: wsStatus === "connected" },
-    { label: "Voice Input", value: voiceSupported ? "READY" : "UNSUPPORTED", ok: voiceSupported },
-    {
-      label: "Ambient Audio",
-      value: !musicBlocked ? "PLAYING" : "PAUSED",
-      ok: !musicBlocked
-    }
-  ];
+  const activeVerdict = VERDICT_MAP[selectedDemo.verdict] || VERDICT_MAP.uncertain;
+  const VerdictIcon = activeVerdict.icon;
+
+  const statusText =
+    appMode === "analyzing" || agentState === "processing"
+      ? "ANALYZING"
+      : sessionLive
+        ? "COMPLETE"
+        : "READY";
 
   const pushEvent = (de, en) => {
     eventId.current += 1;
@@ -579,7 +591,7 @@ export default function App() {
       if (!transcript) return;
       setQueryText(transcript);
       sendQuery(transcript);
-      pushEvent(`Audio decodiert: ${transcript}`, `Audio decoded: ${transcript}`);
+      pushEvent(`Audio decoded: ${transcript}`, `Audio decoded: ${transcript}`);
     };
 
     speechRecognitionRef.current = recognition;
@@ -676,16 +688,14 @@ export default function App() {
   }, [hasLiveHud, hud.product_identity?.name, demoIndex]);
 
   return (
-    <div className="nv-app anim-focus">
-      <header className="nv-topbar anim-slide-up d-1">
+    <div className="nv-app">
+      <header className="nv-topbar">
         <div className="nv-brand">
           <div className="nv-logo-box">
-            <Camera size={14} />
+            <Eye size={13} />
           </div>
-          <div className="nv-brand-copy">
-            <p className="nv-kicker">NUTRIVISION LIVE AGENT</p>
-            <p className="nv-title">Realtime Copilot Console</p>
-          </div>
+          <span className="nv-brand-name">NutriVision</span>
+          <span className="nv-badge">Gemini Live Agent</span>
         </div>
 
         <nav className="nv-nav-links">
@@ -697,71 +707,94 @@ export default function App() {
 
         <div className="nv-actions">
           <a href="#" className="nv-btn nv-btn-dark">
-            <Github size={14} />
+            <Github size={13} />
             Repo
           </a>
-          <a href="#demo" className="nv-btn nv-btn-primary">
-            <Play size={14} />
+          <a href="#" className="nv-btn nv-btn-primary">
+            <Play size={12} />
             Demo
           </a>
-
-          <div className="nv-select-wrap">
-            <Globe size={13} />
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value)}
-              aria-label="Language"
-            >
-              <option value="de">{userLanguageLabel("de")}</option>
-              <option value="en">{userLanguageLabel("en")}</option>
-            </select>
-          </div>
-
-          <div className="nv-select-wrap nv-domain">
-            <AudioLines size={13} />
-            <select
-              value={domain}
-              onChange={(event) => setDomain(event.target.value)}
-              aria-label="Domain"
-            >
-              <option value="food">Food</option>
-              <option value="beauty">Cosmetics</option>
-            </select>
-          </div>
-
-          <div className={`nv-status-badge ${wsStatus === "connected" ? "is-online" : "is-offline"}`}>
-            {wsStatus === "connected" ? "ONLINE" : "OFFLINE"}
-          </div>
         </div>
       </header>
 
       <main id="scanner" className="nv-main">
         <section className="nv-grid">
           <div className="nv-left-col">
-            <article className="nv-camera-card anim-slide-up d-2">
+            <article className="nv-camera-card">
               <video ref={videoRef} autoPlay playsInline muted className="nv-video" />
               <canvas ref={canvasRef} className="nv-hidden-canvas" />
 
               <div className="nv-camera-overlay" />
               <div className="nv-camera-grid" />
 
+              <div className="nv-hud-top">
+                <div className="nv-state-pill">
+                  <span className="nv-dot" />
+                  {statusText}
+                </div>
+
+                <div className="nv-hud-right">
+                  <button
+                    type="button"
+                    className={`nv-hud-btn ${voiceListening ? "is-active" : ""}`}
+                    onClick={toggleVoiceInput}
+                    disabled={!voiceSupported}
+                    title="Voice input"
+                  >
+                    {voiceListening ? <Mic size={13} /> : <MicOff size={13} />}
+                  </button>
+
+                  <span className="nv-listen-pill">
+                    <AudioLines size={11} />
+                    {voiceListening ? "Listening" : "Mic muted"}
+                  </span>
+                </div>
+              </div>
+
               <div className="nv-center-lockup">
                 <div className="nv-reticle">
-                  <ScanLine size={20} />
+                  <ScanLine size={18} />
                 </div>
-                <p>{sessionLive ? "LIVE UPLINK" : "KAMERA OFFLINE"}</p>
-                <button
-                  type="button"
-                  className="nv-session-btn"
-                  onClick={sessionLive ? stopSession : startSession}
-                >
-                  <Play size={14} />
-                  {sessionLive ? "SESSION STOPPEN" : "SESSION STARTEN"}
-                </button>
+              </div>
+
+              <div className="nv-bottom-panel">
+                <div className="nv-product-line">
+                  <span className={`nv-verdict nv-${activeVerdict.tone}`}>
+                    <VerdictIcon size={12} />
+                    {activeVerdict.label}
+                  </span>
+                  <span className="nv-product-name">
+                    {hasLiveHud ? hud.product_identity?.name || selectedDemo.name : selectedDemo.name}
+                  </span>
+                  <span className="nv-latency">{selectedDemo.latency}</span>
+                </div>
+
+                <div className="nv-analysis-grid">
+                  {analysisRows.map((row, index) => (
+                    <div key={`${row.label}-${index}`} className="nv-analysis-item">
+                      <div className="nv-analysis-head">
+                        <span>{row.label}</span>
+                        <strong>{Math.round(row.score)}%</strong>
+                      </div>
+                      <div className="nv-progress">
+                        <i className={`nv-progress-bar ${scoreTone(row.score)}`} style={{ width: `${Math.max(3, row.score)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="nv-warning-tags">
+                  {warningRows.slice(0, 4).map((warning) => (
+                    <span key={warning}>
+                      <AlertTriangle size={11} />
+                      {warning}
+                    </span>
+                  ))}
+                </div>
               </div>
             </article>
 
-            <article className="nv-command-dock anim-slide-up d-3">
+            <article className="nv-command-dock">
               <input
                 type="text"
                 value={queryText}
@@ -784,22 +817,21 @@ export default function App() {
 
               <button
                 type="button"
-                className={`nv-icon-btn ${voiceListening ? "is-active" : ""}`}
-                onClick={toggleVoiceInput}
-                disabled={!voiceSupported}
-                title="Voice input"
-              >
-                {voiceListening ? <Mic size={14} /> : <MicOff size={14} />}
-              </button>
-
-              <button
-                type="button"
                 className="nv-icon-btn"
                 onClick={triggerBargeIn}
                 disabled={!sessionLive}
                 title="Barge in"
               >
-                <Circle size={14} />
+                <Circle size={13} />
+              </button>
+
+              <button
+                type="button"
+                className="nv-icon-btn"
+                onClick={sessionLive ? stopSession : startSession}
+                title={sessionLive ? "Stop session" : "Start session"}
+              >
+                <Play size={13} />
               </button>
 
               <button type="button" className="nv-send-btn" onClick={() => sendQuery()}>
@@ -810,64 +842,79 @@ export default function App() {
           </div>
 
           <aside className="nv-right-col">
-            <article className="nv-panel anim-slide-right d-2">
+            <article className="nv-panel">
               <header>
                 <span>
-                  <Volume2 size={12} />
-                  SPRACHANTWORT
-                </span>
-                <span className="nv-live-chip">LIVE</span>
-              </header>
-
-              <div className="nv-panel-blank">
-                <Eye size={20} />
-                <p>{speechPanelText}</p>
-              </div>
-
-              <footer>
-                <Info size={12} />
-                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung. Bei Allergien/Erkrankungen bitte Arzt:in fragen.
-              </footer>
-            </article>
-
-            <article className="nv-panel anim-slide-right d-3">
-              <header>
-                <span>
-                  <Shield size={12} />
-                  WARNHINWEISE
+                  <Camera size={12} />
+                  DEMO PRODUCTS
                 </span>
               </header>
-              <div className="nv-warning-box">{warningText}</div>
-            </article>
-
-            <article className="nv-panel anim-slide-right d-4">
-              <header>
-                <span>
-                  <AudioLines size={12} />
-                  4-BAR ANALYSE
-                </span>
-              </header>
-
-              <div className="nv-metric-list">
-                {analysisRows.map((row, index) => (
-                  <div key={`${row.label}-${index}`} className="nv-metric-row">
-                    <span>{row.label}</span>
-                    <span>{sessionLive ? `${Math.round(row.score)}%` : "-"}</span>
-                    {sessionLive && <i className={`nv-mini-bar ${scoreTone(row.score)}`} style={{ width: `${row.score}%` }} />}
-                  </div>
+              <div className="nv-product-list">
+                {DEMO_PRODUCTS.map((product, index) => (
+                  <button
+                    key={product.name}
+                    type="button"
+                    onClick={() => setDemoIndex(index)}
+                    className={`nv-product-item ${index === demoIndex ? "is-selected" : ""}`}
+                  >
+                    <div className="nv-product-icon">
+                      {product.verdict === "authorized" ? <CheckCircle2 size={13} /> : <Shield size={13} />}
+                    </div>
+                    <div>
+                      <p>{product.name}</p>
+                      <small>{product.category}</small>
+                    </div>
+                    {index === demoIndex && <i />}
+                  </button>
                 ))}
               </div>
             </article>
 
-            <article className="nv-panel nv-log-panel anim-slide-right d-5">
+            <article className="nv-panel nv-spoken-panel">
+              <header>
+                <span>
+                  <Volume2 size={12} />
+                  SPOKEN VERDICT
+                </span>
+                <span className="nv-live-chip">{wsStatus === "connected" ? "Live" : "Idle"}</span>
+              </header>
+
+              <div className="nv-spoken-body">
+                <p>{speechPanelText}</p>
+              </div>
+
+              <footer>
+                <Info size={11} />
+                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung.
+              </footer>
+            </article>
+
+            <article className="nv-panel nv-kpi-panel">
+              <div className="nv-kpi-grid">
+                <div>
+                  <strong>1.5s</strong>
+                  <span>BARCODE</span>
+                </div>
+                <div>
+                  <strong>300ms</strong>
+                  <span>BARGE-IN</span>
+                </div>
+                <div>
+                  <strong>85%+</strong>
+                  <span>ID RATE</span>
+                </div>
+              </div>
+            </article>
+
+            <article className="nv-panel nv-log-panel">
               <header>
                 <span>
                   <AudioLines size={12} />
-                  SYSTEMPROTOKOLL
+                  SYSTEM LOG
                 </span>
               </header>
               <div className="nv-log-body">
-                {events.slice(0, 6).map((evt) => (
+                {events.slice(0, 5).map((evt) => (
                   <p key={evt.id}>
                     [{evt.time}] <strong>{language === "de" ? evt.de : evt.en}</strong>
                   </p>
@@ -877,93 +924,6 @@ export default function App() {
           </aside>
         </section>
       </main>
-
-      <section id="features" className="nv-landing reveal-up d-4">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">HACKATHON CHECKLIST</span>
-          <h2>Status & Business Requirements</h2>
-          <p>
-            Live scanner shell, multilingual interaction, spoken verdict surface, warnings, and low-volume ambient music with speaking pause.
-          </p>
-
-          <div className="nv-check-grid">
-            {checklist.map((item) => (
-              <article key={item.label} className="nv-check-card">
-                <p>{item.label}</p>
-                <strong className={item.ok ? "ok" : "warn"}>{item.value}</strong>
-              </article>
-            ))}
-          </div>
-
-          <div className="nv-warning-tags">
-            {(hasLiveHud ? warningRows : selectedDemo.warnings).slice(0, 3).map((warning) => (
-              <span key={warning}>
-                <AlertTriangle size={12} />
-                {warning}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="workflow" className="nv-landing reveal-up d-5">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">WORKFLOW</span>
-          <h2>Scan to Verdict in Under Two Seconds</h2>
-          <p>
-            Camera uplink, AI identification, spoken reasoning, and warning analysis are synced for live demo scoring and business clarity.
-          </p>
-          <div className="nv-flow-grid">
-            <article>
-              <h3>1. Point & Scan</h3>
-              <p>Start session and capture barcode or product image.</p>
-            </article>
-            <article>
-              <h3>2. AI Identifies</h3>
-              <p>Multimodal backend classifies product and risk signals.</p>
-            </article>
-            <article>
-              <h3>3. Spoken Verdict</h3>
-              <p>Agent responds with concise, interruptible guidance.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section id="trust" className="nv-landing reveal-up d-6" aria-label="Trust section">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">TRUST</span>
-          <h2>Built for Hackathon + Real Business Use</h2>
-          <p>
-            Conservative language, transparent warnings, real-time controls, and clear audit logs for demo judges and stakeholders.
-          </p>
-        </div>
-      </section>
-
-      <section id="demo" className="nv-landing nv-cta reveal-up d-6">
-        <div className="nv-landing-inner">
-          <span className="nv-chip">HACKATHON SUBMISSION</span>
-          <h2>Watch the Live Demo</h2>
-          <p>
-            See NutriVision analyze products in real-time with barcode scanning, speech interaction, and HUD-style monitoring.
-          </p>
-          <div className="nv-cta-actions">
-            <a href="#" className="nv-btn nv-btn-primary">
-              <Play size={14} />
-              Watch Demo Video
-            </a>
-            <a href="#" className="nv-btn nv-btn-dark">
-              <Github size={14} />
-              View Repository
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <footer className="nv-footer">
-        <span>NutriVision</span>
-        <span>Built for the Gemini Live Agent Challenge · Powered by Google Cloud</span>
-      </footer>
     </div>
   );
 }
