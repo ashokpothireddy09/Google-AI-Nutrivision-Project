@@ -267,7 +267,6 @@ export default function App() {
   const [voiceListening, setVoiceListening] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [landingWindowOpen, setLandingWindowOpen] = useState(true);
   const [events, setEvents] = useState([
     {
       id: 1,
@@ -319,10 +318,7 @@ export default function App() {
       : selectedDemo.spokenVerdict);
 
   const musicBlocked =
-    !audioUnlocked ||
-    agentState === "speaking" ||
-    agentState === "processing" ||
-    (!landingWindowOpen && !sessionLive);
+    !audioUnlocked || agentState === "speaking" || agentState === "processing";
 
   const activeVerdict = VERDICT_MAP[selectedDemo.verdict] || VERDICT_MAP.uncertain;
   const VerdictIcon = activeVerdict.icon;
@@ -361,7 +357,7 @@ export default function App() {
     const audio = ambientAudioRef.current;
     if (!audio || musicBlocked) return;
 
-    audio.volume = 0.07;
+    audio.volume = 0.03;
 
     try {
       await audio.play();
@@ -375,7 +371,7 @@ export default function App() {
 
     ambientPauseTimerRef.current = window.setTimeout(() => {
       pauseAmbientAudio();
-    }, 4600);
+    }, 10000);
   };
 
   const closeSocket = () => {
@@ -747,10 +743,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    const landingTimer = window.setTimeout(() => {
-      setLandingWindowOpen(false);
-    }, 10000);
-
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     setVoiceSupported(Boolean(SpeechRecognitionCtor));
 
@@ -780,7 +772,6 @@ export default function App() {
     window.addEventListener("touchstart", unlockAudio);
 
     return () => {
-      window.clearTimeout(landingTimer);
       stopCamera();
       closeSocket();
       if (speechRecognitionRef.current) speechRecognitionRef.current.stop();
@@ -805,7 +796,7 @@ export default function App() {
     playAmbientBit();
     ambientLoopRef.current = window.setInterval(() => {
       playAmbientBit();
-    }, 12000);
+    }, 15000);
 
     return () => {
       clearAmbientTimers();
