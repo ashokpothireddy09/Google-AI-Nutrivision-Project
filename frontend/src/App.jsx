@@ -93,14 +93,16 @@ const FEATURE_ITEMS = [
   {
     icon: Scan,
     title: "Barcode-First ID",
-    description: "Instant product identification with fallback to visual search.",
+    description:
+      "Instant product identification with intelligent fallback to visual search.",
     stat: "1.5s",
     statLabel: "latency"
   },
   {
     icon: Mic,
     title: "Voice Interaction",
-    description: "Interruptible spoken verdicts with natural follow-ups.",
+    description:
+      "Zero-typing interface with interruptible spoken verdicts and natural follow-ups.",
     stat: "300ms",
     statLabel: "barge-in"
   },
@@ -114,21 +116,24 @@ const FEATURE_ITEMS = [
   {
     icon: Zap,
     title: "Live Agent",
-    description: "Gemini multimodal AI for context-aware product guidance.",
+    description:
+      "Gemini multimodal AI for real-time, context-aware product guidance.",
     stat: "Live",
     statLabel: "streaming"
   },
   {
     icon: ShieldCheck,
     title: "Allergen Alerts",
-    description: "Conservative warnings for allergens and restricted ingredients.",
+    description:
+      "Conservative, medically-phrased warnings for allergens and restricted ingredients.",
     stat: "5-tier",
     statLabel: "verdicts"
   },
   {
     icon: FlaskConical,
     title: "Cosmetics Beta",
-    description: "INCI parsing, allergen flags, and surfactant checks.",
+    description:
+      "INCI parsing, fragrance allergen flags, surfactant and microplastics screening.",
     stat: "Beta",
     statLabel: "expanding"
   }
@@ -136,24 +141,28 @@ const FEATURE_ITEMS = [
 
 const HOW_STEPS = [
   {
-    icon: Camera,
+    icon: Scan,
     title: "Point & Scan",
-    description: "Aim your camera at product barcode or packaging for auto-detection."
+    description:
+      "Aim your camera at any product barcode or packaging. Auto-detection in under a second."
   },
   {
     icon: Brain,
     title: "AI Identifies",
-    description: "Gemini processes image and retrieves grounded ingredient signals."
+    description:
+      "Gemini processes the image, identifies the product, and retrieves grounded ingredient data."
   },
   {
     icon: AudioLines,
     title: "Spoken Verdict",
-    description: "Get concise spoken assessment and interrupt for follow-up questions."
+    description:
+      "Receive a concise 2-3 sentence spoken assessment. Interrupt anytime with follow-ups."
   },
   {
     icon: LayoutDashboard,
     title: "HUD Analysis",
-    description: "Warnings and bar analysis stay overlaid in real time."
+    description:
+      "Warning chips and 4-bar analysis overlay in real-time for a complete health snapshot."
   }
 ];
 
@@ -161,22 +170,26 @@ const TRUST_PILLARS = [
   {
     icon: ShieldCheck,
     title: "Medical Phrasing",
-    description: "Clear informational guidance, distinct from medical advice."
+    description:
+      "Conservative, medically-responsible language. Clear distinction between informational guidance and medical advice."
   },
   {
     icon: Scale,
     title: "5-Tier Classification",
-    description: "Authorized, restricted, warning, not authorized, or uncertain."
+    description:
+      "Authorized, restricted, warning required, not authorized, or uncertain. Never ambiguous."
   },
   {
     icon: Cloud,
     title: "Cloud-Native",
-    description: "Google Cloud Run backend with Gemini multimodal processing."
+    description:
+      "Google Cloud Run for production-grade reliability, Gemini multimodal AI powering every analysis."
   },
   {
     icon: Lock,
     title: "Privacy First",
-    description: "Real-time camera processing flow; no feed persistence by design."
+    description:
+      "Camera feeds processed in real-time and never stored. Shopping data stays on your device."
   }
 ];
 
@@ -1071,6 +1084,7 @@ export default function App() {
           <div className="nv-section-head">
             <span>Capabilities</span>
             <h2>Precision Instrument for Everyday Decisions</h2>
+            <p>Every feature calibrated for speed, accuracy, and clarity.</p>
           </div>
           <div className="nv-feature-grid">
             {FEATURE_ITEMS.map((feature) => (
@@ -1131,6 +1145,18 @@ export default function App() {
               </article>
             ))}
           </div>
+          <article className="nv-disclaimer-card">
+            <Info size={16} />
+            <div>
+              <strong>Disclaimer</strong>
+              <p>
+                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung. Bei Allergien/Erkrankungen bitte Arzt:in fragen.
+              </p>
+              <p>
+                Notice: For informational purposes only. Not medical advice. For allergies or health conditions, please consult a physician.
+              </p>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -1150,6 +1176,19 @@ export default function App() {
               <Github size={14} />
               View Repository
             </a>
+          </div>
+          <div className="nv-cta-kpi-grid">
+            {[
+              { value: "1.5s", label: "Barcode Latency" },
+              { value: "300ms", label: "Barge-in Pivot" },
+              { value: "85%+", label: "Identification" },
+              { value: "3/3", label: "Stability Runs" }
+            ].map((kpi) => (
+              <div key={kpi.label}>
+                <strong>{kpi.value}</strong>
+                <span>{kpi.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>

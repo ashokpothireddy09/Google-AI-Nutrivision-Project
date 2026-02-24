@@ -764,6 +764,14 @@ a {
   letter-spacing: -0.02em;
 }
 
+.nv-section-head p {
+  margin: 0.7rem auto 0;
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .nv-feature-grid {
   display: grid;
   gap: 0.74rem;
@@ -898,6 +906,38 @@ a {
   line-height: 1.45;
 }
 
+.nv-disclaimer-card {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.nv-disclaimer-card svg {
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.nv-disclaimer-card strong {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.nv-disclaimer-card p {
+  margin: 0.35rem 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .nv-cta {
   padding-top: 3.2rem;
 }
@@ -920,6 +960,31 @@ a {
   justify-content: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.nv-cta-kpi-grid {
+  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.nv-cta-kpi-grid div {
+  text-align: center;
+}
+
+.nv-cta-kpi-grid strong {
+  display: block;
+  color: var(--primary);
+  font-family: "Geist Mono", monospace;
+  font-size: 24px;
+}
+
+.nv-cta-kpi-grid span {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .nv-footer {
@@ -989,6 +1054,10 @@ a {
   .nv-steps-grid,
   .nv-trust-grid {
     grid-template-columns: 1fr;
+  }
+
+  .nv-cta-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .nv-footer-inner {
