@@ -3,23 +3,34 @@
 NutriVision Live is a realtime multimodal shopping copilot (camera + voice + HUD) for the Gemini Live Agent Challenge.
 
 ## Stack
+
 - Frontend: React + Vite
-- Backend: FastAPI WebSocket proxy + tool orchestration
-- Infra: Terraform for Cloud Run, Vertex AI API, Secret Manager, Artifact Registry
+- Backend: FastAPI WebSocket proxy
+- Infra: Terraform (Cloud Run, Vertex AI API, Secret Manager, Artifact Registry)
 
-## Documentation Map
-- Start here: `start.md`
-- Project management index: `project_management/README.md`
-- Documentation index: `docs/README.md`
-- Testing guides: `docs/testing/README.md`
+## Start Here
 
-## Quick start
-1. Backend: `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && uvicorn app.main:app --reload`
-2. Frontend: `cd frontend && pnpm install && pnpm run dev`
+1. `start.md`
+2. `project_management/README.md`
+3. `project_management/status.md`
+4. `docs/testing/README.md`
 
-## Cloud deploy (Terraform)
-Use the execution flow in `start.md` (Step C + Step D). It covers:
-- required API enablement,
-- two-phase Terraform apply,
-- backend image build/push,
-- secret payload injection via `TF_VAR_secret_payloads`.
+## Quick Local Run
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Frontend
+
+```bash
+cd frontend
+pnpm install
+pnpm run dev
+```

@@ -4,7 +4,7 @@ Use this as a gate-based checklist. A gate closes only when all mandatory items 
 
 ## Gate 0 - Scope and Requirement Lock
 
-- [x] Requirement sources reviewed (`docs/requirements/*`).
+- [x] Requirement sources reviewed (`project_management/requirements_baseline/*`).
 - [x] Scope boundary locked (Food MVP mandatory, Cosmetics Basic Beta decision recorded).
 - [x] Requirement IDs mapped to planned tasks.
 - [x] Acceptance criteria defined for all critical flows.

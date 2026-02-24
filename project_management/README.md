@@ -1,24 +1,25 @@
-# Project Management Docs Index
+# Project Management Hub
 
-This folder is the execution control center for the project.
+This folder is the single source of truth for planning and execution.
 
-## Files and Purpose
+## Structure
 
 - `requirements_from_user.md`
-  - Locked decisions from stakeholder/user intake.
+  - Locked business and product decisions from stakeholder intake.
+- `requirements_baseline/`
+  - Stable baseline requirements (business, UX/demo, technical).
 - `plan.md`
-  - Phase plan, gate model, and implementation strategy.
+  - Execution strategy and phase sequencing.
 - `checklist.md`
-  - Gate-by-gate completion checklist.
+  - Gate-by-gate completion tracker.
 - `status.md`
-  - Current progress snapshot, what was completed, and what is pending.
+  - Current done/pending state with next actions.
 - `hackathon-absolute-requirements.md`
-  - Non-negotiable challenge constraints and submission rules.
+  - Mandatory challenge submission constraints.
 
-## Usage Guidance
+## Operating rules
 
-1. Read `requirements_from_user.md` first.
-2. Use `status.md` to see what changed recently.
-3. Execute against `checklist.md` gates.
-4. Use `plan.md` for phase structure and sequencing.
-5. Keep `status.md` updated whenever implementation or cloud status changes.
+1. Update `status.md` after any meaningful implementation or cloud change.
+2. Mark items in `checklist.md` only after verification.
+3. Keep requirement changes in `requirements_from_user.md` and `requirements_baseline/`.
+4. Keep technical test instructions in `docs/testing/` (not duplicated here).
