@@ -267,6 +267,7 @@ export default function App() {
   const [voiceListening, setVoiceListening] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [landingWindowOpen, setLandingWindowOpen] = useState(true);
   const [events, setEvents] = useState([
     {
       id: 1,
@@ -318,7 +319,10 @@ export default function App() {
       : selectedDemo.spokenVerdict);
 
   const musicBlocked =
-    !audioUnlocked || !sessionLive || agentState === "speaking" || agentState === "processing";
+    !audioUnlocked ||
+    agentState === "speaking" ||
+    agentState === "processing" ||
+    (!landingWindowOpen && !sessionLive);
 
   const activeVerdict = VERDICT_MAP[selectedDemo.verdict] || VERDICT_MAP.uncertain;
   const VerdictIcon = activeVerdict.icon;
@@ -743,6 +747,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    const landingTimer = window.setTimeout(() => {
+      setLandingWindowOpen(false);
+    }, 10000);
+
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     setVoiceSupported(Boolean(SpeechRecognitionCtor));
 
@@ -772,6 +780,7 @@ export default function App() {
     window.addEventListener("touchstart", unlockAudio);
 
     return () => {
+      window.clearTimeout(landingTimer);
       stopCamera();
       closeSocket();
       if (speechRecognitionRef.current) speechRecognitionRef.current.stop();
@@ -814,7 +823,12 @@ export default function App() {
 
   return (
     <div className="nv-app">
-      <header className="nv-topbar">
+      <div id="nv-intro">
+        <div className="intro-text">&gt; SENSOR_ALIGNMENT_COMPLETE</div>
+        <div className="intro-laser" />
+      </div>
+
+      <header className="nv-topbar anim-slide-up d-1">
         <div className="nv-brand">
           <div className="nv-logo-box">
             <Eye size={13} />
@@ -856,7 +870,7 @@ export default function App() {
       <main id="scanner" className="nv-main">
         <section className="nv-grid">
           <div className="nv-left-col">
-            <article className="nv-camera-card">
+            <article className="nv-camera-card anim-slide-up d-2">
               <video ref={videoRef} autoPlay playsInline muted className="nv-video" />
               <canvas ref={canvasRef} className="nv-hidden-canvas" />
 
@@ -913,7 +927,10 @@ export default function App() {
                         <strong>{Math.round(row.score)}%</strong>
                       </div>
                       <div className="nv-progress">
-                        <i className={`nv-progress-bar ${scoreTone(row.score)}`} style={{ width: `${Math.max(3, row.score)}%` }} />
+                        <i
+                          className={`nv-progress-bar ${scoreTone(row.score)} bar-${(index % 4) + 1}`}
+                          style={{ "--target-width": `${Math.max(3, row.score)}%` }}
+                        />
                       </div>
                     </div>
                   ))}
@@ -930,7 +947,7 @@ export default function App() {
               </div>
             </article>
 
-            <article className="nv-command-dock">
+            <article className="nv-command-dock anim-slide-up d-3">
               <input
                 type="text"
                 value={queryText}
@@ -978,7 +995,7 @@ export default function App() {
           </div>
 
           <aside className="nv-right-col">
-            <article className="nv-panel">
+            <article className="nv-panel anim-slide-right d-4">
               <header>
                 <span>
                   <Camera size={12} />
@@ -1006,7 +1023,7 @@ export default function App() {
               </div>
             </article>
 
-            <article className="nv-panel nv-spoken-panel">
+            <article className="nv-panel nv-spoken-panel anim-slide-right d-5">
               <header>
                 <span>
                   <Volume2 size={12} />
@@ -1025,7 +1042,7 @@ export default function App() {
               </footer>
             </article>
 
-            <article className="nv-panel nv-kpi-panel">
+            <article className="nv-panel nv-kpi-panel anim-slide-right d-6">
               <div className="nv-kpi-grid">
                 <div>
                   <strong>1.5s</strong>
@@ -1042,7 +1059,7 @@ export default function App() {
               </div>
             </article>
 
-            <article className="nv-panel nv-log-panel">
+            <article className="nv-panel nv-log-panel anim-slide-right d-6">
               <header>
                 <span>
                   <AudioLines size={12} />
