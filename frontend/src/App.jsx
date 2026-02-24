@@ -1,23 +1,69 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  AudioLines,
+  Camera,
+  Circle,
+  Eye,
+  Github,
+  Globe,
+  Info,
+  Mic,
+  MicOff,
+  Play,
+  ScanLine,
+  SendHorizonal,
+  Shield,
+  Volume2
+} from "lucide-react";
 
-const CATEGORY_LABEL = {
-  authorized: "Authorized",
-  restricted: "Restricted",
-  warning_required: "Warning required",
-  not_authorized: "Not authorized",
-  uncertain: "Uncertain"
-};
-
-const DOMAIN_LABEL = {
-  food: { de: "Lebensmittel", en: "Food" },
-  beauty: { de: "Kosmetik Beta", en: "Cosmetics Beta" }
-};
+const DEMO_PRODUCTS = [
+  {
+    name: "Organic Oat Cereal",
+    category: "Food",
+    bars: [
+      { label: "Metrik 1", value: 88 },
+      { label: "Metrik 2", value: 95 },
+      { label: "Metrik 3", value: 72 },
+      { label: "Metrik 4", value: 65 }
+    ],
+    spokenVerdict:
+      "This organic oat cereal has a strong nutritional profile with minimal additives. Note: contains gluten. Suitable for most diets.",
+    warnings: ["Gluten present", "High fiber"]
+  },
+  {
+    name: "Berry Energy Drink",
+    category: "Food",
+    bars: [
+      { label: "Metrik 1", value: 35 },
+      { label: "Metrik 2", value: 42 },
+      { label: "Metrik 3", value: 29 },
+      { label: "Metrik 4", value: 84 }
+    ],
+    spokenVerdict:
+      "Warning: high caffeine, artificial colorings, and significant added sugars. Not recommended for children or caffeine-sensitive individuals.",
+    warnings: ["High caffeine", "Artificial colors"]
+  },
+  {
+    name: "Gentle Face Cream",
+    category: "Cosmetics (Beta)",
+    bars: [
+      { label: "Metrik 1", value: 71 },
+      { label: "Metrik 2", value: 52 },
+      { label: "Metrik 3", value: 43 },
+      { label: "Metrik 4", value: 79 }
+    ],
+    spokenVerdict:
+      "This face cream contains a flagged fragrance allergen and a harsh surfactant. Individuals with sensitive skin should patch-test first.",
+    warnings: ["Fragrance allergen", "Surfactant flag"]
+  }
+];
 
 const INITIAL_HUD = {
   product_identity: {
     id: "unknown",
-    name: "No product yet",
-    brand: "Point camera and ask"
+    name: "Awaiting target...",
+    brand: "SYSTEM"
   },
   grade_or_tier: "-",
   confidence: 0,
@@ -30,40 +76,29 @@ const INITIAL_HUD = {
 function formatClock() {
   return new Date().toLocaleTimeString([], {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    second: "2-digit"
   });
 }
 
-function pick(language, value) {
-  return language === "de" ? value.de : value.en;
-}
-
 function backendWsUrl() {
-  if (import.meta.env.VITE_BACKEND_WS_URL) {
-    return import.meta.env.VITE_BACKEND_WS_URL;
-  }
-
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   return `${protocol}://${window.location.hostname}:8000/ws/live`;
 }
 
-function agentLabel(language, agentState) {
-  if (agentState === "connecting") {
-    return language === "de" ? "Verbinde" : "Connecting";
-  }
-  if (agentState === "processing") {
-    return language === "de" ? "Analysiert" : "Processing";
-  }
-  if (agentState === "speaking") {
-    return language === "de" ? "Spricht" : "Speaking";
-  }
-  if (agentState === "interrupted") {
-    return language === "de" ? "Unterbrochen" : "Interrupted";
-  }
-  if (agentState === "listening") {
-    return language === "de" ? "Bereit" : "Listening";
-  }
-  return language === "de" ? "Offline" : "Offline";
+function scoreTone(score) {
+  if (score >= 75) return "score-high";
+  if (score >= 50) return "score-mid";
+  if (score >= 35) return "score-low";
+  return "score-bad";
+}
+
+function userLanguageLabel(lang) {
+  return lang === "de" ? "DE" : "EN";
+}
+
+function SendIcon() {
+  return <SendHorizonal size={14} />;
 }
 
 export default function App() {
@@ -76,41 +111,130 @@ export default function App() {
   const mediaRecorderRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const speakingResetTimerRef = useRef(null);
+  const ambientAudioRef = useRef(null);
+  const ambientLoopRef = useRef(null);
+  const ambientPauseTimerRef = useRef(null);
 
   const [language, setLanguage] = useState("de");
   const [domain, setDomain] = useState("food");
   const [sessionLive, setSessionLive] = useState(false);
   const [wsStatus, setWsStatus] = useState("disconnected");
-  const [appMode, setAppMode] = useState("active_scan");
   const [agentState, setAgentState] = useState("disconnected");
+  const [appMode, setAppMode] = useState("active_scan");
   const [hud, setHud] = useState(INITIAL_HUD);
   const [queryText, setQueryText] = useState("");
   const [barcodeText, setBarcodeText] = useState("");
   const [spokenText, setSpokenText] = useState("");
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
-  const [uncertainText, setUncertainText] = useState("");
-  const [uncertainCandidates, setUncertainCandidates] = useState([]);
+  const [demoIndex, setDemoIndex] = useState(0);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [events, setEvents] = useState([
     {
       id: 1,
       time: formatClock(),
-      de: "UI bereit. Starte die Session fuer Live Kamera + Analyse.",
-      en: "UI ready. Start session for live camera + analysis."
+      de: "System initialisiert. Warte auf Video-Uplink.",
+      en: "System initialized. Awaiting video uplink."
     }
   ]);
 
-  const confidencePercent = useMemo(() => Math.round((hud.confidence || 0) * 100), [hud.confidence]);
-  const confidenceLow = (hud.confidence || 0) < 0.65;
+  const selectedDemo = DEMO_PRODUCTS[demoIndex];
+  const hasLiveHud = sessionLive && hud.product_identity?.id && hud.product_identity.id !== "unknown";
+
+  const metricRows = useMemo(() => {
+    const rows = Array.isArray(hud.metrics)
+      ? hud.metrics.slice(0, 4).map((metric, index) => ({
+          label: metric.name || `Metrik ${index + 1}`,
+          score: Math.max(0, Math.min(100, Number(metric.score || 0))),
+          value: metric.value ?? "-"
+        }))
+      : [];
+
+    while (rows.length < 4) {
+      rows.push({
+        label: `Metrik ${rows.length + 1}`,
+        score: 0,
+        value: "-"
+      });
+    }
+
+    return rows;
+  }, [hud.metrics]);
+
+  const analysisRows = hasLiveHud
+    ? metricRows
+    : selectedDemo.bars.map((bar, index) => ({
+        label: bar.label || `Metrik ${index + 1}`,
+        score: bar.value,
+        value: "-"
+      }));
+
+  const speechPanelText =
+    spokenText ||
+    (sessionLive ? "Live-Antwort wird verarbeitet..." : "Scan starten fuer Live-Verlauf");
+
+  const warningRows = hasLiveHud
+    ? (hud.warnings || []).map((warning) => warning.label).filter(Boolean)
+    : [];
+
+  const warningText = warningRows.length > 0 ? warningRows.join(" | ") : "Keine Warnungen erkannt";
+
+  const musicBlocked =
+    !audioUnlocked || !sessionLive || agentState === "speaking" || agentState === "processing";
+
+  const checklist = [
+    { label: "Live Session", value: sessionLive ? "ACTIVE" : "OFFLINE", ok: sessionLive },
+    { label: "Backend Uplink", value: wsStatus.toUpperCase(), ok: wsStatus === "connected" },
+    { label: "Voice Input", value: voiceSupported ? "READY" : "UNSUPPORTED", ok: voiceSupported },
+    {
+      label: "Ambient Audio",
+      value: !musicBlocked ? "PLAYING" : "PAUSED",
+      ok: !musicBlocked
+    }
+  ];
 
   const pushEvent = (de, en) => {
     eventId.current += 1;
-    setEvents((prev) => [{ id: eventId.current, time: formatClock(), de, en }, ...prev].slice(0, 10));
+    setEvents((prev) => [{ id: eventId.current, time: formatClock(), de, en }, ...prev].slice(0, 20));
   };
 
-  const clearUncertainState = () => {
-    setUncertainText("");
-    setUncertainCandidates([]);
+  const clearAmbientTimers = () => {
+    if (ambientLoopRef.current) {
+      window.clearInterval(ambientLoopRef.current);
+      ambientLoopRef.current = null;
+    }
+    if (ambientPauseTimerRef.current) {
+      window.clearTimeout(ambientPauseTimerRef.current);
+      ambientPauseTimerRef.current = null;
+    }
+  };
+
+  const pauseAmbientAudio = (reset = false) => {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+    audio.pause();
+    if (reset) audio.currentTime = 0;
+  };
+
+  const playAmbientBit = async () => {
+    const audio = ambientAudioRef.current;
+    if (!audio || musicBlocked) return;
+
+    audio.volume = 0.07;
+
+    try {
+      await audio.play();
+    } catch {
+      return;
+    }
+
+    if (ambientPauseTimerRef.current) {
+      window.clearTimeout(ambientPauseTimerRef.current);
+    }
+
+    ambientPauseTimerRef.current = window.setTimeout(() => {
+      pauseAmbientAudio();
+    }, 4600);
   };
 
   const closeSocket = () => {
@@ -133,9 +257,7 @@ export default function App() {
 
   const stopAudioCapture = () => {
     const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
-    }
+    if (recorder && recorder.state !== "inactive") recorder.stop();
     mediaRecorderRef.current = null;
   };
 
@@ -151,24 +273,18 @@ export default function App() {
 
   const startFrameLoop = () => {
     stopFrameLoop();
+
     frameLoopRef.current = window.setInterval(() => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const socket = wsRef.current;
-      if (!video || !canvas || !socket || socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
-
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        return;
-      }
+      if (!video || !canvas || !socket || socket.readyState !== WebSocket.OPEN) return;
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
       canvas.width = 640;
       canvas.height = 360;
       const context = canvas.getContext("2d", { alpha: false });
-      if (!context) {
-        return;
-      }
+      if (!context) return;
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const image = canvas.toDataURL("image/jpeg", 0.65);
@@ -187,39 +303,37 @@ export default function App() {
   const startAudioCapture = () => {
     stopAudioCapture();
     const stream = mediaStreamRef.current;
-    if (!stream || typeof MediaRecorder === "undefined") {
-      return;
-    }
+    if (!stream || typeof MediaRecorder === "undefined") return;
 
     const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length === 0) {
-      return;
-    }
+    if (audioTracks.length === 0) return;
 
     const audioStream = new MediaStream(audioTracks);
+
     let recorder;
     try {
       const preferredMime = "audio/webm;codecs=opus";
-      const options = MediaRecorder.isTypeSupported?.(preferredMime) ? { mimeType: preferredMime } : undefined;
+      const options = MediaRecorder.isTypeSupported?.(preferredMime)
+        ? { mimeType: preferredMime }
+        : undefined;
       recorder = new MediaRecorder(audioStream, options);
     } catch {
       return;
     }
+
     recorder.ondataavailable = async (event) => {
-      if (!event.data || event.data.size === 0) {
-        return;
-      }
+      if (!event.data || event.data.size === 0) return;
       const socket = wsRef.current;
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
       try {
         const audioB64 = await blobToDataUrl(event.data);
         socket.send(JSON.stringify({ type: "audio_chunk", audio_b64: audioB64 }));
       } catch {
-        // ignore chunk conversion errors
+        // noop
       }
     };
+
     recorder.start(1000);
     mediaRecorderRef.current = recorder;
   };
@@ -233,13 +347,7 @@ export default function App() {
         wsRef.current = socket;
         setWsStatus("connected");
         setAgentState("listening");
-        socket.send(
-          JSON.stringify({
-            type: "session_start",
-            domain,
-            language
-          })
-        );
+        socket.send(JSON.stringify({ type: "session_start", domain, language }));
         settled = true;
         resolve();
       };
@@ -247,9 +355,7 @@ export default function App() {
       socket.onerror = () => {
         setWsStatus("error");
         setAgentState("disconnected");
-        if (!settled) {
-          reject(new Error("WebSocket connection failed"));
-        }
+        if (!settled) reject(new Error("WebSocket connection failed"));
       };
 
       socket.onclose = () => {
@@ -257,26 +363,29 @@ export default function App() {
         setSessionLive(false);
         setAgentState("disconnected");
         setAppMode("active_scan");
+        clearAmbientTimers();
+        pauseAmbientAudio(true);
         stopCamera();
       };
 
       socket.onmessage = (event) => {
         let data;
+
         try {
           data = JSON.parse(event.data);
         } catch {
-          pushEvent("Ungueltiges Backend-Ereignis empfangen.", "Invalid backend event received.");
+          pushEvent("Datenpaket korrupt.", "Data packet corrupt.");
           return;
         }
+
         const eventType = data.event_type || data.type;
 
         if (eventType === "hud_update") {
           setHud(data);
           setAppMode("hud_active");
-          clearUncertainState();
           pushEvent(
-            `HUD aktualisiert: ${data.product_identity?.name || "Produkt"}`,
-            `HUD updated: ${data.product_identity?.name || "product"}`
+            `Ziel erfasst: ${data.product_identity?.name || "Unbekannt"}`,
+            `Target acquired: ${data.product_identity?.name || "Unknown"}`
           );
           return;
         }
@@ -284,12 +393,12 @@ export default function App() {
         if (eventType === "speech_text") {
           setSpokenText(data.text || "");
           setAgentState("speaking");
+
           if (window.speechSynthesis && data.text) {
             const utterance = new SpeechSynthesisUtterance(data.text);
             utterance.lang = data.language === "de" ? "de-DE" : "en-US";
-            utterance.onend = () => {
+            utterance.onend = () =>
               setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
-            };
             window.speechSynthesis.cancel();
             window.speechSynthesis.speak(utterance);
           } else {
@@ -304,12 +413,9 @@ export default function App() {
         if (eventType === "uncertain_match") {
           setAppMode("uncertain_match");
           setAgentState("listening");
-          setUncertainText(data.message || "Unclear product match.");
-          const candidates = Array.isArray(data.details?.candidates) ? data.details.candidates : [];
-          setUncertainCandidates(candidates);
           pushEvent(
-            "Unklare Zuordnung: Rueckfrage an Nutzer erforderlich.",
-            "Uncertain match: user clarification required."
+            "Zieldaten mehrdeutig. Manuelle Auswahl erforderlich.",
+            "Target data ambiguous. Manual override required."
           );
           return;
         }
@@ -359,6 +465,7 @@ export default function App() {
     });
 
     mediaStreamRef.current = stream;
+
     const video = videoRef.current;
     if (video) {
       video.srcObject = stream;
@@ -367,29 +474,27 @@ export default function App() {
   };
 
   const startSession = async () => {
-    if (sessionLive) {
-      return;
-    }
+    if (sessionLive) return;
 
     try {
       setWsStatus("connecting");
       setAgentState("connecting");
       setAppMode("active_scan");
-      clearUncertainState();
       setSpokenText("");
+      setAudioUnlocked(true);
       await startCamera();
       await connectSocket();
       setSessionLive(true);
       startFrameLoop();
       startAudioCapture();
-      pushEvent("Live Session gestartet (Kamera + Audio).", "Live session started (camera + audio).");
+      pushEvent("Uplink etabliert (A/V).", "Uplink established (A/V).");
     } catch {
       stopCamera();
       closeSocket();
       setSessionLive(false);
       setWsStatus("error");
       setAgentState("disconnected");
-      pushEvent("Sessionstart fehlgeschlagen. Kamera oder Backend pruefen.", "Session start failed. Check camera/backend.");
+      pushEvent("Uplink fehlgeschlagen. Sensoren pruefen.", "Uplink failed. Check sensors.");
     }
   };
 
@@ -397,47 +502,36 @@ export default function App() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "session_end" }));
     }
+
     stopCamera();
     closeSocket();
     setSessionLive(false);
     setWsStatus("disconnected");
     setAgentState("disconnected");
     setAppMode("active_scan");
-    clearUncertainState();
     setHud(INITIAL_HUD);
     setSpokenText("");
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    pushEvent("Live Session beendet.", "Live session stopped.");
-  };
 
-  const toggleSession = () => {
-    if (sessionLive) {
-      stopSession();
-      return;
-    }
-    void startSession();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+    clearAmbientTimers();
+    pauseAmbientAudio(true);
+    pushEvent("Uplink getrennt.", "Uplink severed.");
   };
 
   const sendQuery = (queryOverride) => {
     const socket = wsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-      pushEvent("Keine Verbindung zum Backend.", "No backend connection.");
+      pushEvent("Kein Backend-Uplink.", "No backend uplink.");
       return;
     }
 
     const cleanQuery = (queryOverride ?? queryText).trim();
     const cleanBarcode = barcodeText.trim();
-
-    if (!cleanQuery && !cleanBarcode) {
-      pushEvent("Bitte Frage oder Barcode eingeben.", "Please provide question or barcode.");
-      return;
-    }
+    if (!cleanQuery && !cleanBarcode) return;
 
     setAppMode("analyzing");
     setAgentState("processing");
-    clearUncertainState();
 
     socket.send(
       JSON.stringify({
@@ -447,21 +541,19 @@ export default function App() {
         domain
       })
     );
-    pushEvent(
-      cleanQuery ? `Frage gesendet: ${cleanQuery}` : `Barcode gesendet: ${cleanBarcode}`,
-      cleanQuery ? `Query sent: ${cleanQuery}` : `Barcode sent: ${cleanBarcode}`
-    );
-  };
 
-  const sendCandidateSelection = (candidateName) => {
-    setQueryText(candidateName);
-    sendQuery(candidateName);
+    pushEvent(
+      cleanQuery ? `Transmitting query: ${cleanQuery}` : `Transmitting code: ${cleanBarcode}`,
+      cleanQuery ? `Transmitting query: ${cleanQuery}` : `Transmitting code: ${cleanBarcode}`
+    );
+
+    if (!queryOverride) setQueryText("");
   };
 
   const toggleVoiceInput = () => {
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) {
-      pushEvent("Sprachaufnahme wird in diesem Browser nicht unterstuetzt.", "Voice input is not supported in this browser.");
+      pushEvent("Audio-Eingabe nicht unterstuetzt.", "Audio input unsupported.");
       return;
     }
 
@@ -480,16 +572,14 @@ export default function App() {
     recognition.onend = () => setVoiceListening(false);
     recognition.onerror = () => {
       setVoiceListening(false);
-      pushEvent("Sprachaufnahme fehlgeschlagen.", "Voice capture failed.");
+      pushEvent("Audio-Erfassung fehlgeschlagen.", "Audio capture failed.");
     };
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript?.trim() || "";
-      if (!transcript) {
-        return;
-      }
+      if (!transcript) return;
       setQueryText(transcript);
       sendQuery(transcript);
-      pushEvent(`Sprachfrage erkannt: ${transcript}`, `Voice query recognized: ${transcript}`);
+      pushEvent(`Audio decodiert: ${transcript}`, `Audio decoded: ${transcript}`);
     };
 
     speechRecognitionRef.current = recognition;
@@ -498,277 +588,382 @@ export default function App() {
 
   const triggerBargeIn = () => {
     const socket = wsRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      pushEvent("Barge-in nur in aktiver Session moeglich.", "Barge-in requires active session.");
-      return;
-    }
-
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({ type: "barge_in" }));
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+
     setAgentState("interrupted");
-    setSpokenText(language === "de" ? "Unterbrochen." : "Interrupted.");
+    setSpokenText(language === "de" ? "System unterbrochen." : "System halted.");
+
     window.clearTimeout(speakingResetTimerRef.current);
     speakingResetTimerRef.current = window.setTimeout(() => {
       setAgentState("listening");
       setSpokenText("");
-    }, 350);
-    pushEvent("Barge-in gesendet.", "Barge-in sent.");
+    }, 500);
+
+    pushEvent("Barge-in command transmitted.", "Barge-in command transmitted.");
   };
 
   useEffect(() => {
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     setVoiceSupported(Boolean(SpeechRecognitionCtor));
 
+    const ambient = new Audio("/Echoes_of_the_Neon_Garden.mp3");
+    ambient.preload = "auto";
+    ambientAudioRef.current = ambient;
+
+    const unlockAudio = async () => {
+      const audio = ambientAudioRef.current;
+      if (!audio) return;
+      try {
+        audio.volume = 0.001;
+        await audio.play();
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // ignore browser autoplay policy
+      }
+      setAudioUnlocked(true);
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+    };
+
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio);
+
     return () => {
       stopCamera();
       closeSocket();
-      if (speechRecognitionRef.current) {
-        speechRecognitionRef.current.stop();
-      }
+      if (speechRecognitionRef.current) speechRecognitionRef.current.stop();
       window.clearTimeout(speakingResetTimerRef.current);
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      clearAmbientTimers();
+      pauseAmbientAudio(true);
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      ambientAudioRef.current = null;
     };
   }, []);
 
+  useEffect(() => {
+    clearAmbientTimers();
+    if (musicBlocked) {
+      pauseAmbientAudio();
+      return;
+    }
+
+    playAmbientBit();
+    ambientLoopRef.current = window.setInterval(() => {
+      playAmbientBit();
+    }, 12000);
+
+    return () => {
+      clearAmbientTimers();
+    };
+  }, [musicBlocked]);
+
+  useEffect(() => {
+    if (!hasLiveHud) return;
+    const liveName = String(hud.product_identity?.name || "").toLowerCase();
+    const idx = DEMO_PRODUCTS.findIndex((product) =>
+      liveName.includes(product.name.toLowerCase())
+    );
+    if (idx >= 0 && idx !== demoIndex) setDemoIndex(idx);
+  }, [hasLiveHud, hud.product_identity?.name, demoIndex]);
+
   return (
-    <div className="page-bg">
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-      <main className="app-shell">
-        <header className="topbar card fade-in">
-          <div>
-            <p className="eyebrow">NutriVision Live</p>
-            <h1>Realtime Camera + Voice Copilot</h1>
+    <div className="nv-app anim-focus">
+      <header className="nv-topbar anim-slide-up d-1">
+        <div className="nv-brand">
+          <div className="nv-logo-box">
+            <Camera size={14} />
+          </div>
+          <div className="nv-brand-copy">
+            <p className="nv-kicker">NUTRIVISION LIVE AGENT</p>
+            <p className="nv-title">Realtime Copilot Console</p>
+          </div>
+        </div>
+
+        <nav className="nv-nav-links">
+          <a href="#scanner">Scanner</a>
+          <a href="#features">Features</a>
+          <a href="#workflow">How It Works</a>
+          <a href="#trust">Trust</a>
+        </nav>
+
+        <div className="nv-actions">
+          <a href="#" className="nv-btn nv-btn-dark">
+            <Github size={14} />
+            Repo
+          </a>
+          <a href="#demo" className="nv-btn nv-btn-primary">
+            <Play size={14} />
+            Demo
+          </a>
+
+          <div className="nv-select-wrap">
+            <Globe size={13} />
+            <select
+              value={language}
+              onChange={(event) => setLanguage(event.target.value)}
+              aria-label="Language"
+            >
+              <option value="de">{userLanguageLabel("de")}</option>
+              <option value="en">{userLanguageLabel("en")}</option>
+            </select>
           </div>
 
-          <div className="topbar-controls">
-            <label>
-              <span>{language === "de" ? "Sprache" : "Language"}</span>
-              <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-
-            <label>
-              <span>{language === "de" ? "Domain" : "Domain"}</span>
-              <select value={domain} onChange={(event) => setDomain(event.target.value)}>
-                <option value="food">Food</option>
-                <option value="beauty">Cosmetics Beta</option>
-              </select>
-            </label>
-
-            <div className={`session-pill ${wsStatus === "connecting" ? "connecting" : sessionLive ? "live" : wsStatus === "error" ? "error" : "idle"}`}>
-              {agentLabel(language, agentState)}
-            </div>
+          <div className="nv-select-wrap nv-domain">
+            <AudioLines size={13} />
+            <select
+              value={domain}
+              onChange={(event) => setDomain(event.target.value)}
+              aria-label="Domain"
+            >
+              <option value="food">Food</option>
+              <option value="beauty">Cosmetics</option>
+            </select>
           </div>
-        </header>
 
-        <section className="status-grid fade-in delay-1">
-          <article className="card status-card">
-            <p>{language === "de" ? "Domain" : "Domain"}</p>
-            <strong>{pick(language, DOMAIN_LABEL[domain])}</strong>
-          </article>
-          <article className="card status-card">
-            <p>{language === "de" ? "Vertrauen" : "Confidence"}</p>
-            <strong>{confidencePercent}%</strong>
-          </article>
-          <article className="card status-card">
-            <p>{language === "de" ? "WS Status" : "WS Status"}</p>
-            <strong>{wsStatus}</strong>
-          </article>
-        </section>
+          <div className={`nv-status-badge ${wsStatus === "connected" ? "is-online" : "is-offline"}`}>
+            {wsStatus === "connected" ? "ONLINE" : "OFFLINE"}
+          </div>
+        </div>
+      </header>
 
-        <section className="workspace fade-in delay-2">
-          <article className="card camera-card">
-            <div className="camera-viewport">
-              <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
-              <canvas ref={canvasRef} className="camera-canvas" />
-              {appMode !== "analyzing" && <div className="scan-line" />}
+      <main id="scanner" className="nv-main">
+        <section className="nv-grid">
+          <div className="nv-left-col">
+            <article className="nv-camera-card anim-slide-up d-2">
+              <video ref={videoRef} autoPlay playsInline muted className="nv-video" />
+              <canvas ref={canvasRef} className="nv-hidden-canvas" />
 
-              <div className="product-badge">
-                <p>{hud.product_identity?.brand || "-"}</p>
-                <strong>{hud.product_identity?.name || "No product"}</strong>
-              </div>
+              <div className="nv-camera-overlay" />
+              <div className="nv-camera-grid" />
 
-              {appMode === "uncertain_match" && (
-                <div className="uncertain-overlay">
-                  <div className="uncertain-card">
-                    <h3>{language === "de" ? "Unklare Zuordnung" : "Unclear match"}</h3>
-                    <p>
-                      {uncertainText ||
-                        (language === "de"
-                          ? "Bitte Produkt genauer beschreiben oder eine Option auswaehlen."
-                          : "Please clarify the product or pick an option.")}
-                    </p>
-                    {uncertainCandidates.length > 0 && (
-                      <div className="candidate-row">
-                        {uncertainCandidates.map((candidate, index) => (
-                          <button
-                            key={`${candidate.id || candidate.name || "candidate"}-${index}`}
-                            type="button"
-                            onClick={() => sendCandidateSelection(candidate.name || "")}
-                            className="candidate-chip"
-                          >
-                            {candidate.name || `${language === "de" ? "Option" : "Option"} ${index + 1}`}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+              <div className="nv-center-lockup">
+                <div className="nv-reticle">
+                  <ScanLine size={20} />
                 </div>
-              )}
-
-              <div className="hud-panel">
-                <p className="hud-title">{language === "de" ? "Sprachantwort" : "Voice output"}</p>
-                <p className="hud-verdict">
-                  {appMode === "analyzing"
-                    ? language === "de"
-                      ? "Analysiere Anfrage und Produktdaten ..."
-                      : "Analyzing query and product data ..."
-                    : spokenText ||
-                      (language === "de"
-                        ? "Starte Session, halte Produkt ins Bild und stelle eine Frage."
-                        : "Start session, point camera to product, and ask a question.")}
-                </p>
+                <p>{sessionLive ? "LIVE UPLINK" : "KAMERA OFFLINE"}</p>
+                <button
+                  type="button"
+                  className="nv-session-btn"
+                  onClick={sessionLive ? stopSession : startSession}
+                >
+                  <Play size={14} />
+                  {sessionLive ? "SESSION STOPPEN" : "SESSION STARTEN"}
+                </button>
               </div>
-            </div>
+            </article>
 
-            <div className="query-dock">
+            <article className="nv-command-dock anim-slide-up d-3">
               <input
                 type="text"
                 value={queryText}
-                placeholder={language === "de" ? "Frage z.B. Ist das fuer Kinder okay?" : "Ask e.g. Is this good for kids?"}
                 onChange={(event) => setQueryText(event.target.value)}
+                placeholder={language === "de" ? "Frage stellen..." : "Ask a question..."}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") sendQuery();
+                }}
               />
+
               <input
                 type="text"
                 value={barcodeText}
-                placeholder={language === "de" ? "Barcode optional" : "Barcode optional"}
                 onChange={(event) => setBarcodeText(event.target.value)}
+                placeholder="BARCODE"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") sendQuery();
+                }}
               />
-              <button className="btn" onClick={() => sendQuery()}>
-                {language === "de" ? "Senden" : "Send"}
+
+              <button
+                type="button"
+                className={`nv-icon-btn ${voiceListening ? "is-active" : ""}`}
+                onClick={toggleVoiceInput}
+                disabled={!voiceSupported}
+                title="Voice input"
+              >
+                {voiceListening ? <Mic size={14} /> : <MicOff size={14} />}
               </button>
-            </div>
 
-            <div className="sources-row">
-              {(hud.data_sources || []).map((source) => (
-                <span key={source} className="source-chip">
-                  {source}
+              <button
+                type="button"
+                className="nv-icon-btn"
+                onClick={triggerBargeIn}
+                disabled={!sessionLive}
+                title="Barge in"
+              >
+                <Circle size={14} />
+              </button>
+
+              <button type="button" className="nv-send-btn" onClick={() => sendQuery()}>
+                <SendIcon />
+                SENDEN
+              </button>
+            </article>
+          </div>
+
+          <aside className="nv-right-col">
+            <article className="nv-panel anim-slide-right d-2">
+              <header>
+                <span>
+                  <Volume2 size={12} />
+                  SPRACHANTWORT
                 </span>
-              ))}
-            </div>
-          </article>
+                <span className="nv-live-chip">LIVE</span>
+              </header>
 
-          <article className="card insight-card">
-            <section>
-              <h2>{language === "de" ? "Warnhinweise" : "Warnings"}</h2>
-              <div className="warning-grid">
-                {(hud.warnings || []).length === 0 ? (
-                  <div className="warning-chip">
-                    <span>Info</span>
-                    <strong>{language === "de" ? "Noch keine Warnungen" : "No warnings yet"}</strong>
-                  </div>
-                ) : (
-                  (hud.warnings || []).map((warning, index) => (
-                    <div key={`${warning.category}-${index}`} className="warning-chip">
-                      <span>{CATEGORY_LABEL[warning.category] || warning.category}</span>
-                      <strong>{warning.label}</strong>
-                    </div>
-                  ))
-                )}
+              <div className="nv-panel-blank">
+                <Eye size={20} />
+                <p>{speechPanelText}</p>
               </div>
-            </section>
 
-            <section>
-              <h2>{language === "de" ? "Analyse-Chart" : "Analysis chart"}</h2>
-              <div className="metric-list">
-                {(hud.metrics || []).length === 0 ? (
-                  <div className="metric-item">
-                    <div className="metric-head">
-                      <span>{language === "de" ? "Keine Metriken" : "No metrics"}</span>
-                      <strong>-</strong>
-                    </div>
-                    <div className="meter-track" />
+              <footer>
+                <Info size={12} />
+                Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung. Bei Allergien/Erkrankungen bitte Arzt:in fragen.
+              </footer>
+            </article>
+
+            <article className="nv-panel anim-slide-right d-3">
+              <header>
+                <span>
+                  <Shield size={12} />
+                  WARNHINWEISE
+                </span>
+              </header>
+              <div className="nv-warning-box">{warningText}</div>
+            </article>
+
+            <article className="nv-panel anim-slide-right d-4">
+              <header>
+                <span>
+                  <AudioLines size={12} />
+                  4-BAR ANALYSE
+                </span>
+              </header>
+
+              <div className="nv-metric-list">
+                {analysisRows.map((row, index) => (
+                  <div key={`${row.label}-${index}`} className="nv-metric-row">
+                    <span>{row.label}</span>
+                    <span>{sessionLive ? `${Math.round(row.score)}%` : "-"}</span>
+                    {sessionLive && <i className={`nv-mini-bar ${scoreTone(row.score)}`} style={{ width: `${row.score}%` }} />}
                   </div>
-                ) : (
-                  (hud.metrics || []).map((metric, index) => (
-                    <div key={`${metric.name}-${index}`} className="metric-item">
-                      <div className="metric-head">
-                        <span>{metric.name}</span>
-                        <strong>{metric.value}</strong>
-                      </div>
-                      <div className="meter-track">
-                        <div className={`meter-fill ${metric.band}`} style={{ width: `${metric.score}%` }} />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section>
-              <h2>{language === "de" ? "Live Ereignisse" : "Live events"}</h2>
-              <ul className="event-list">
-                {events.map((eventItem) => (
-                  <li key={eventItem.id}>
-                    <span>{eventItem.time}</span>
-                    <p>{language === "de" ? eventItem.de : eventItem.en}</p>
-                  </li>
                 ))}
-              </ul>
-            </section>
-          </article>
+              </div>
+            </article>
+
+            <article className="nv-panel nv-log-panel anim-slide-right d-5">
+              <header>
+                <span>
+                  <AudioLines size={12} />
+                  SYSTEMPROTOKOLL
+                </span>
+              </header>
+              <div className="nv-log-body">
+                {events.slice(0, 6).map((evt) => (
+                  <p key={evt.id}>
+                    [{evt.time}] <strong>{language === "de" ? evt.de : evt.en}</strong>
+                  </p>
+                ))}
+              </div>
+            </article>
+          </aside>
         </section>
-
-        <section className="control-dock card fade-in delay-3">
-          <button className="btn primary" onClick={toggleSession}>
-            {sessionLive ? (language === "de" ? "Session stoppen" : "Stop session") : language === "de" ? "Session starten" : "Start session"}
-          </button>
-
-          <button className="btn" onClick={triggerBargeIn}>
-            {language === "de" ? "Barge-in" : "Barge-in"}
-          </button>
-
-          <button className="btn" onClick={toggleVoiceInput} disabled={!voiceSupported}>
-            {voiceListening ? (language === "de" ? "Aufnahme stoppen" : "Stop listening") : language === "de" ? "Sprachfrage" : "Voice query"}
-          </button>
-
-          <button className="btn" onClick={() => window.speechSynthesis?.cancel()}>
-            {language === "de" ? "Audio stoppen" : "Stop audio"}
-          </button>
-
-          <button
-            className="btn"
-            onClick={() => {
-              setHud(INITIAL_HUD);
-              setAppMode("active_scan");
-              clearUncertainState();
-            }}
-          >
-            {language === "de" ? "HUD reset" : "Reset HUD"}
-          </button>
-        </section>
-
-        <footer className="disclaimer fade-in delay-3">
-          <p>
-            Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung. Bei Allergien/Erkrankungen bitte Arzt:in
-            fragen.
-          </p>
-          {confidenceLow && (
-            <p className="low-confidence-note">
-              {language === "de"
-                ? "Konfidenz niedrig: Bitte Produktbezeichnung oder Barcode bestaetigen."
-                : "Low confidence: please confirm product name or barcode."}
-            </p>
-          )}
-        </footer>
       </main>
+
+      <section id="features" className="nv-landing reveal-up d-4">
+        <div className="nv-landing-inner">
+          <span className="nv-chip">HACKATHON CHECKLIST</span>
+          <h2>Status & Business Requirements</h2>
+          <p>
+            Live scanner shell, multilingual interaction, spoken verdict surface, warnings, and low-volume ambient music with speaking pause.
+          </p>
+
+          <div className="nv-check-grid">
+            {checklist.map((item) => (
+              <article key={item.label} className="nv-check-card">
+                <p>{item.label}</p>
+                <strong className={item.ok ? "ok" : "warn"}>{item.value}</strong>
+              </article>
+            ))}
+          </div>
+
+          <div className="nv-warning-tags">
+            {(hasLiveHud ? warningRows : selectedDemo.warnings).slice(0, 3).map((warning) => (
+              <span key={warning}>
+                <AlertTriangle size={12} />
+                {warning}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow" className="nv-landing reveal-up d-5">
+        <div className="nv-landing-inner">
+          <span className="nv-chip">WORKFLOW</span>
+          <h2>Scan to Verdict in Under Two Seconds</h2>
+          <p>
+            Camera uplink, AI identification, spoken reasoning, and warning analysis are synced for live demo scoring and business clarity.
+          </p>
+          <div className="nv-flow-grid">
+            <article>
+              <h3>1. Point & Scan</h3>
+              <p>Start session and capture barcode or product image.</p>
+            </article>
+            <article>
+              <h3>2. AI Identifies</h3>
+              <p>Multimodal backend classifies product and risk signals.</p>
+            </article>
+            <article>
+              <h3>3. Spoken Verdict</h3>
+              <p>Agent responds with concise, interruptible guidance.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="trust" className="nv-landing reveal-up d-6" aria-label="Trust section">
+        <div className="nv-landing-inner">
+          <span className="nv-chip">TRUST</span>
+          <h2>Built for Hackathon + Real Business Use</h2>
+          <p>
+            Conservative language, transparent warnings, real-time controls, and clear audit logs for demo judges and stakeholders.
+          </p>
+        </div>
+      </section>
+
+      <section id="demo" className="nv-landing nv-cta reveal-up d-6">
+        <div className="nv-landing-inner">
+          <span className="nv-chip">HACKATHON SUBMISSION</span>
+          <h2>Watch the Live Demo</h2>
+          <p>
+            See NutriVision analyze products in real-time with barcode scanning, speech interaction, and HUD-style monitoring.
+          </p>
+          <div className="nv-cta-actions">
+            <a href="#" className="nv-btn nv-btn-primary">
+              <Play size={14} />
+              Watch Demo Video
+            </a>
+            <a href="#" className="nv-btn nv-btn-dark">
+              <Github size={14} />
+              View Repository
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <footer className="nv-footer">
+        <span>NutriVision</span>
+        <span>Built for the Gemini Live Agent Challenge · Powered by Google Cloud</span>
+      </footer>
     </div>
   );
 }
