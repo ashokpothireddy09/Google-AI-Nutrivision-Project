@@ -121,7 +121,7 @@ a {
 }
 
 .nv-brand-name {
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -131,7 +131,7 @@ a {
   border: 1px solid rgba(45, 213, 222, 0.25);
   background: rgba(45, 213, 222, 0.08);
   color: var(--primary);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   padding: 0.16rem 0.48rem;
 }
@@ -145,7 +145,7 @@ a {
 
 .nv-nav-links a {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   padding: 0.22rem 0.4rem;
   border-radius: 6px;
@@ -170,7 +170,7 @@ a {
   border-radius: 8px;
   border: 1px solid var(--border);
   padding: 0 0.72rem;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -192,7 +192,7 @@ a {
   border: 1px solid var(--border);
   background: #0f1621;
   color: #d4e0eb;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -293,7 +293,7 @@ a {
   background: rgba(45, 213, 222, 0.09);
   color: var(--foreground);
   padding: 0.44rem 0.72rem;
-  font-size: 13px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   font-family: "Geist Mono", monospace;
   font-weight: 700;
@@ -338,7 +338,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -418,7 +418,7 @@ a {
 }
 
 .nv-product-name {
-  font-size: 38px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -429,7 +429,7 @@ a {
   border: 1px solid var(--border);
   background: #182230;
   padding: 0.16rem 0.42rem;
-  font-size: 12px;
+  font-size: 10px;
   font-family: "Geist Mono", monospace;
   color: #b3c4d4;
 }
@@ -449,14 +449,14 @@ a {
 }
 
 .nv-analysis-head span {
-  font-size: 13px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 
 .nv-analysis-head strong {
-  font-size: 13px;
+  font-size: 10px;
   font-family: "Geist Mono", monospace;
 }
 
@@ -524,7 +524,7 @@ a {
   background: rgba(225, 180, 88, 0.12);
   color: #e9cb89;
   padding: 0.14rem 0.52rem;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -546,7 +546,7 @@ a {
   background: #0a121d;
   color: var(--foreground);
   padding: 0 0.8rem;
-  font-size: 28px;
+  font-size: 14px;
 }
 
 .nv-command-dock input::placeholder {
@@ -573,7 +573,7 @@ a {
   min-width: 114px;
   gap: 0.28rem;
   color: #dce7f4;
-  font-size: 15px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 
@@ -603,7 +603,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 0.34rem;
-  font-size: 16px;
+  font-size: 12px;
   font-family: "Geist Mono", monospace;
   letter-spacing: 0.08em;
   color: #96adbf;
@@ -647,13 +647,13 @@ a {
 
 .nv-product-item p {
   margin: 0;
-  font-size: 30px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .nv-product-item small {
   color: var(--muted);
-  font-size: 16px;
+  font-size: 10px;
 }
 
 .nv-product-item i {
@@ -674,7 +674,7 @@ a {
   background: rgba(45, 213, 222, 0.12);
   color: #9de9ed;
   padding: 0.12rem 0.44rem;
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .nv-spoken-body {
@@ -683,7 +683,7 @@ a {
 
 .nv-spoken-body p {
   margin: 0;
-  font-size: 32px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -692,7 +692,7 @@ a {
   padding: 0.74rem 0.85rem;
   display: flex;
   gap: 0.34rem;
-  font-size: 16px;
+  font-size: 10px;
   color: var(--muted);
   line-height: 1.4;
 }
@@ -711,12 +711,12 @@ a {
 .nv-kpi-grid strong {
   display: block;
   font-family: "Geist Mono", monospace;
-  font-size: 34px;
+  font-size: 18px;
   color: var(--primary);
 }
 
 .nv-kpi-grid span {
-  font-size: 13px;
+  font-size: 9px;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
@@ -729,7 +729,7 @@ a {
   padding: 0.72rem;
   display: grid;
   gap: 0.38rem;
-  font-size: 17px;
+  font-size: 11px;
   color: #8ea4b8;
   font-family: "Geist Mono", monospace;
 }
@@ -776,12 +776,12 @@ a {
 
 .nv-tech-item p {
   margin: 0;
-  font-size: 16px;
+  font-size: 12px;
   color: #d2e0ec;
 }
 
 .nv-tech-item small {
-  font-size: 12px;
+  font-size: 9px;
 }
 
 .nv-section {
@@ -811,7 +811,7 @@ a {
 .nv-section-head h2,
 .nv-cta h2 {
   margin: 0.9rem 0 0;
-  font-size: clamp(42px, 5vw, 62px);
+  font-size: clamp(26px, 3.2vw, 40px);
   line-height: 1.2;
   letter-spacing: -0.02em;
 }
@@ -820,7 +820,7 @@ a {
   margin: 0.7rem auto 0;
   max-width: 980px;
   color: var(--muted);
-  font-size: 28px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -873,12 +873,12 @@ a {
 
 .nv-feature-card h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .nv-feature-card p {
   margin: 0.4rem 0 0;
-  font-size: 15px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.45;
 }
@@ -910,12 +910,12 @@ a {
 
 .nv-step-card h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .nv-step-card p {
   margin: 0.36rem 0 0;
-  font-size: 15px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -948,12 +948,12 @@ a {
 
 .nv-trust-card h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .nv-trust-card p {
   margin: 0.35rem 0 0;
-  font-size: 15px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.45;
 }
@@ -977,7 +977,7 @@ a {
 
 .nv-disclaimer-card strong {
   display: block;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -985,7 +985,7 @@ a {
 
 .nv-disclaimer-card p {
   margin: 0.35rem 0 0;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--muted);
 }
@@ -1001,7 +1001,7 @@ a {
 
 .nv-cta p {
   margin: 0.8rem auto 0;
-  font-size: 19px;
+  font-size: 14px;
   color: var(--muted);
   max-width: 560px;
 }
@@ -1029,11 +1029,11 @@ a {
   display: block;
   color: var(--primary);
   font-family: "Geist Mono", monospace;
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .nv-cta-kpi-grid span {
-  font-size: 11px;
+  font-size: 9px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1054,7 +1054,7 @@ a {
 .nv-footer p {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .anim-slide-up {
