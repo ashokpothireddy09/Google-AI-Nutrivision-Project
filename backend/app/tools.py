@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, TypeVar
 
@@ -39,6 +40,61 @@ def _cache_get(cache: dict[str, tuple[float, T]], key: str) -> T | None:
 
 def _cache_set(cache: dict[str, tuple[float, T]], key: str, value: T) -> None:
     cache[key] = (time.time() + settings.cache_ttl_seconds, value)
+
+
+def _dedupe_nonempty(values: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        item = str(raw or "").strip()
+        if not item:
+            continue
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+def _search_query_variants(query_text: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", query_text).strip()
+    if not normalized:
+        return []
+
+    lowered = normalized.lower().replace("lay's", "lays").replace("lay’s", "lays")
+    variants: list[str] = [normalized]
+
+    if "lays" in lowered or ("chips" in lowered and ("classic" in lowered or "yellow" in lowered)):
+        variants.extend(["lays classic chips", "lays chips", "lays"])
+
+    tokens = [token for token in re.split(r"\s+", lowered) if token]
+    if len(tokens) >= 3:
+        variants.extend([" ".join(tokens[:2]), " ".join(tokens[-2:])])
+
+    return _dedupe_nonempty(variants)
+
+
+def _search_locale_variants(locale_country: str, locale_language: str) -> list[tuple[str, str]]:
+    variants: list[tuple[str, str]] = []
+    base_country = str(locale_country or "").strip().lower()
+    base_language = str(locale_language or "").strip().lower()
+
+    if base_country or base_language:
+        variants.append((base_country, base_language))
+    if base_country and base_language != "en":
+        variants.append((base_country, "en"))
+    variants.append(("world", "en"))
+
+    deduped: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for country, language in variants:
+        key = (country, language)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append((country, language))
+    return deduped
 
 
 async def get_product_by_barcode(
@@ -104,25 +160,38 @@ async def search_product_catalog(
 
     fields = BEAUTY_FIELDS if domain == "beauty" else FOOD_FIELDS
     url = f"{_base_url(domain)}/cgi/search.pl"
-    params: dict[str, Any] = {
-        "search_terms": query_text,
-        "search_simple": 1,
-        "action": "process",
-        "json": 1,
-        "cc": locale_country,
-        "lc": locale_language,
-        "page_size": max_results,
-        "fields": fields,
-    }
     headers = {"User-Agent": settings.off_user_agent}
 
     products: list[dict[str, Any]] = []
+    query_variants = _search_query_variants(query_text)
+    locale_variants = _search_locale_variants(locale_country=locale_country, locale_language=locale_language)
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
-            response = await client.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            payload = response.json()
-            products = payload.get("products") or []
+            for query_variant in query_variants:
+                for country_variant, language_variant in locale_variants:
+                    params: dict[str, Any] = {
+                        "search_terms": query_variant,
+                        "search_simple": 1,
+                        "action": "process",
+                        "json": 1,
+                        "page_size": max_results,
+                        "fields": fields,
+                    }
+                    if country_variant:
+                        params["cc"] = country_variant
+                    if language_variant:
+                        params["lc"] = language_variant
+                    try:
+                        response = await client.get(url, params=params, headers=headers)
+                        response.raise_for_status()
+                        payload = response.json()
+                        products = payload.get("products") or []
+                    except Exception:
+                        continue
+                    if products:
+                        break
+                if products:
+                    break
     except Exception:
         products = []
 

@@ -224,8 +224,37 @@ function formatClock() {
 }
 
 function backendWsUrl() {
+  if (import.meta.env.VITE_BACKEND_WS_URL) {
+    return import.meta.env.VITE_BACKEND_WS_URL;
+  }
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocol}://${window.location.hostname}:8000/ws/live`;
+  if (import.meta.env.DEV) {
+    return `${protocol}://${window.location.hostname}:8000/ws/live`;
+  }
+  return `${protocol}://${window.location.host}/ws/live`;
+}
+
+const LANGUAGE_OPTIONS = [
+  { code: "de", label: "DE", locale: "de-DE" },
+  { code: "en", label: "EN", locale: "en-US" },
+  { code: "es", label: "ES", locale: "es-ES" },
+  { code: "fr", label: "FR", locale: "fr-FR" },
+  { code: "hi", label: "HI", locale: "hi-IN" },
+  { code: "it", label: "IT", locale: "it-IT" },
+  { code: "pt", label: "PT", locale: "pt-PT" }
+];
+
+function languageLocale(code) {
+  const found = LANGUAGE_OPTIONS.find((option) => option.code === code);
+  return found?.locale || "en-US";
+}
+
+function detectInitialLanguage() {
+  const browserLocale = String(globalThis?.navigator?.language || "")
+    .trim()
+    .toLowerCase();
+  const matched = LANGUAGE_OPTIONS.find((option) => browserLocale.startsWith(option.code));
+  return matched?.code || "en";
 }
 
 function scoreTone(score) {
@@ -248,12 +277,31 @@ export default function App() {
   const frameLoopRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const speechRecognitionRef = useRef(null);
+  const voiceAutoRestartRef = useRef(false);
+  const lastVoiceTranscriptRef = useRef({ text: "", ts: 0 });
+  const speechFallbackTimerRef = useRef(null);
   const speakingResetTimerRef = useRef(null);
+  const visionProbeTimerRef = useRef(null);
   const ambientAudioRef = useRef(null);
   const ambientLoopRef = useRef(null);
   const ambientPauseTimerRef = useRef(null);
+  const serverAudioRef = useRef(null);
+  const serverAudioUrlRef = useRef("");
+  const lastServerAudioTurnRef = useRef("");
+  const pendingSpeechTurnRef = useRef("");
+  const clientClosingSocketRef = useRef(null);
+  const barcodeDetectorRef = useRef(null);
+  const lastDetectedBarcodeRef = useRef("");
+  const lastDetectedBarcodeAtRef = useRef(0);
+  const sessionStartingRef = useRef(false);
+  const socketGenerationRef = useRef(0);
+  const lastEventRef = useRef({ key: "", ts: 0 });
+  const lastSentQueryRef = useRef({ signature: "", ts: 0 });
+  const agentStateRef = useRef("disconnected");
+  const backendAudioActiveRef = useRef(false);
+  const spokenTextRef = useRef("");
 
-  const [language, setLanguage] = useState("de");
+  const [language, setLanguage] = useState(detectInitialLanguage);
   const [domain, setDomain] = useState("food");
   const [sessionLive, setSessionLive] = useState(false);
   const [wsStatus, setWsStatus] = useState("disconnected");
@@ -265,8 +313,15 @@ export default function App() {
   const [spokenText, setSpokenText] = useState("");
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(true);
   const [demoIndex, setDemoIndex] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [sessionError, setSessionError] = useState("");
+  const [cameraReady, setCameraReady] = useState(false);
+  const [scannerSupported, setScannerSupported] = useState(false);
+  const [backendAudioActive, setBackendAudioActive] = useState(false);
+  const [uncertainPrompt, setUncertainPrompt] = useState("");
+  const [uncertainCandidates, setUncertainCandidates] = useState([]);
   const [events, setEvents] = useState([
     {
       id: 1,
@@ -277,6 +332,7 @@ export default function App() {
   ]);
 
   const selectedDemo = DEMO_PRODUCTS[demoIndex];
+  const wsEndpoint = useMemo(() => backendWsUrl(), []);
   const hasLiveHud = sessionLive && hud.product_identity?.id && hud.product_identity.id !== "unknown";
 
   const metricRows = useMemo(() => {
@@ -318,7 +374,7 @@ export default function App() {
       : selectedDemo.spokenVerdict);
 
   const musicBlocked =
-    !audioUnlocked || agentState === "speaking" || agentState === "processing";
+    !audioUnlocked || sessionLive || agentState === "speaking" || agentState === "processing";
 
   const activeVerdict = VERDICT_MAP[selectedDemo.verdict] || VERDICT_MAP.uncertain;
   const VerdictIcon = activeVerdict.icon;
@@ -327,13 +383,32 @@ export default function App() {
     appMode === "analyzing" || agentState === "processing"
       ? "ANALYZING"
       : sessionLive
-        ? "COMPLETE"
+        ? cameraReady
+          ? "LIVE"
+          : "UPLINKED"
         : "READY";
 
   const pushEvent = (de, en) => {
+    const now = Date.now();
+    const key = `${String(de || "").trim()}|${String(en || "").trim()}`;
+    const previous = lastEventRef.current;
+    if (key && key === previous.key && now - previous.ts < 1400) return;
+    lastEventRef.current = { key, ts: now };
     eventId.current += 1;
     setEvents((prev) => [{ id: eventId.current, time: formatClock(), de, en }, ...prev].slice(0, 20));
   };
+
+  useEffect(() => {
+    agentStateRef.current = agentState;
+  }, [agentState]);
+
+  useEffect(() => {
+    backendAudioActiveRef.current = backendAudioActive;
+  }, [backendAudioActive]);
+
+  useEffect(() => {
+    spokenTextRef.current = spokenText;
+  }, [spokenText]);
 
   const clearAmbientTimers = () => {
     if (ambientLoopRef.current) {
@@ -351,6 +426,93 @@ export default function App() {
     if (!audio) return;
     audio.pause();
     if (reset) audio.currentTime = 0;
+  };
+
+  const stopServerAudioPlayback = () => {
+    const activeAudio = serverAudioRef.current;
+    if (activeAudio) {
+      activeAudio.onended = null;
+      activeAudio.onerror = null;
+      activeAudio.pause();
+      activeAudio.src = "";
+    }
+    if (serverAudioUrlRef.current) {
+      URL.revokeObjectURL(serverAudioUrlRef.current);
+      serverAudioUrlRef.current = "";
+    }
+    serverAudioRef.current = null;
+    setBackendAudioActive(false);
+  };
+
+  const decodeAudioBlob = (audioB64, mimeType) => {
+    if (!audioB64 || typeof audioB64 !== "string") return null;
+    const trimmed = audioB64.trim();
+    if (!trimmed) return null;
+    const dataUrl = trimmed.startsWith("data:")
+      ? trimmed
+      : `data:${mimeType || "audio/wav"};base64,${trimmed}`;
+    const splitIndex = dataUrl.indexOf(",");
+    if (splitIndex < 0) return null;
+    const header = dataUrl.slice(0, splitIndex);
+    const payload = dataUrl.slice(splitIndex + 1);
+    const mimeMatch = header.match(/^data:([^;]+);base64$/i);
+    const resolvedMime = mimeType || mimeMatch?.[1] || "audio/wav";
+    try {
+      const binary = window.atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return new Blob([bytes], { type: resolvedMime });
+    } catch {
+      return null;
+    }
+  };
+
+  const playServerAudio = async (audioB64, mimeType) => {
+    if (!audioB64) return;
+    stopServerAudioPlayback();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+    const blob = decodeAudioBlob(audioB64, mimeType);
+    if (!blob) throw new Error("Unable to decode backend audio payload");
+    const objectUrl = URL.createObjectURL(blob);
+    serverAudioUrlRef.current = objectUrl;
+    const audio = new Audio(objectUrl);
+    audio.onended = () => {
+      setBackendAudioActive(false);
+      setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
+      if (serverAudioUrlRef.current) {
+        URL.revokeObjectURL(serverAudioUrlRef.current);
+        serverAudioUrlRef.current = "";
+      }
+      serverAudioRef.current = null;
+    };
+    audio.onerror = () => {
+      setBackendAudioActive(false);
+      setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
+      if (serverAudioUrlRef.current) {
+        URL.revokeObjectURL(serverAudioUrlRef.current);
+        serverAudioUrlRef.current = "";
+      }
+      serverAudioRef.current = null;
+      pushEvent("Server-Audio konnte nicht abgespielt werden.", "Server audio playback failed.");
+    };
+
+    serverAudioRef.current = audio;
+    setBackendAudioActive(true);
+    setAgentState("speaking");
+    await audio.play();
+  };
+
+  const speakWithBrowserTts = (text, voiceLanguageCode) => {
+    if (!window.speechSynthesis || !text) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = languageLocale(String(voiceLanguageCode || language));
+    utterance.onend = () =>
+      setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
   };
 
   const playAmbientBit = async () => {
@@ -375,9 +537,12 @@ export default function App() {
   };
 
   const closeSocket = () => {
+    socketGenerationRef.current += 1;
     if (wsRef.current) {
+      const activeSocket = wsRef.current;
+      clientClosingSocketRef.current = activeSocket;
       try {
-        wsRef.current.close();
+        activeSocket.close();
       } catch {
         // noop
       }
@@ -389,6 +554,62 @@ export default function App() {
     if (frameLoopRef.current) {
       window.clearInterval(frameLoopRef.current);
       frameLoopRef.current = null;
+    }
+  };
+
+  const stopVisionProbeLoop = () => {
+    if (visionProbeTimerRef.current) {
+      window.clearInterval(visionProbeTimerRef.current);
+      visionProbeTimerRef.current = null;
+    }
+  };
+
+  const stopVoiceRecognitionLoop = () => {
+    voiceAutoRestartRef.current = false;
+    const recognition = speechRecognitionRef.current;
+    speechRecognitionRef.current = null;
+    if (!recognition) {
+      setVoiceListening(false);
+      return;
+    }
+    recognition.onend = null;
+    recognition.onerror = null;
+    recognition.onresult = null;
+    try {
+      recognition.stop();
+    } catch {
+      // noop
+    }
+    setVoiceListening(false);
+  };
+
+  const detectBarcodeAndQuery = async (canvas) => {
+    if (!scannerSupported || typeof window.BarcodeDetector === "undefined") return;
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+    try {
+      if (!barcodeDetectorRef.current) {
+        barcodeDetectorRef.current = new window.BarcodeDetector({
+          formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"]
+        });
+      }
+      const matches = await barcodeDetectorRef.current.detect(canvas);
+      if (!Array.isArray(matches) || matches.length === 0) return;
+
+      const candidate = String(matches[0]?.rawValue || "").trim();
+      if (!candidate) return;
+
+      const now = Date.now();
+      const isDuplicate = candidate === lastDetectedBarcodeRef.current && now - lastDetectedBarcodeAtRef.current < 8000;
+      if (isDuplicate) return;
+
+      lastDetectedBarcodeRef.current = candidate;
+      lastDetectedBarcodeAtRef.current = now;
+      sendQuery("", candidate);
+      pushEvent(`Barcode erkannt: ${candidate}`, `Barcode detected: ${candidate}`);
+    } catch {
+      // Ignore detector errors and keep frame uplink running.
     }
   };
 
@@ -406,6 +627,7 @@ export default function App() {
       stream.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
+    setCameraReady(false);
   };
 
   const startFrameLoop = () => {
@@ -418,14 +640,17 @@ export default function App() {
       if (!video || !canvas || !socket || socket.readyState !== WebSocket.OPEN) return;
       if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-      canvas.width = 640;
-      canvas.height = 360;
+      const targetWidth = Math.min(960, video.videoWidth);
+      const scale = targetWidth / video.videoWidth;
+      canvas.width = Math.max(640, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(360, Math.round(video.videoHeight * scale));
       const context = canvas.getContext("2d", { alpha: false });
       if (!context) return;
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const image = canvas.toDataURL("image/jpeg", 0.65);
+      const image = canvas.toDataURL("image/jpeg", 0.85);
       socket.send(JSON.stringify({ type: "frame", image_b64: image }));
+      void detectBarcodeAndQuery(canvas);
     }, 1000);
   };
 
@@ -477,35 +702,64 @@ export default function App() {
 
   const connectSocket = () =>
     new Promise((resolve, reject) => {
-      const socket = new WebSocket(backendWsUrl());
+      const generation = socketGenerationRef.current + 1;
+      socketGenerationRef.current = generation;
+      const socket = new WebSocket(wsEndpoint);
       let settled = false;
 
       socket.onopen = () => {
+        if (generation !== socketGenerationRef.current) {
+          try {
+            socket.close();
+          } catch {
+            // noop
+          }
+          return;
+        }
         wsRef.current = socket;
         setWsStatus("connected");
         setAgentState("listening");
+        setSessionError("");
         socket.send(JSON.stringify({ type: "session_start", domain, language }));
         settled = true;
         resolve();
       };
 
       socket.onerror = () => {
+        if (generation !== socketGenerationRef.current) return;
+        if (clientClosingSocketRef.current === socket) return;
+        if (wsRef.current && wsRef.current !== socket) return;
         setWsStatus("error");
         setAgentState("disconnected");
+        setSessionError(`WebSocket error. Check backend endpoint: ${wsEndpoint}`);
         if (!settled) reject(new Error("WebSocket connection failed"));
       };
 
       socket.onclose = () => {
+        if (generation !== socketGenerationRef.current) return;
+        if (clientClosingSocketRef.current === socket) {
+          clientClosingSocketRef.current = null;
+          return;
+        }
+        if (wsRef.current && wsRef.current !== socket) return;
         setWsStatus("disconnected");
         setSessionLive(false);
         setAgentState("disconnected");
         setAppMode("active_scan");
+        pendingSpeechTurnRef.current = "";
+        lastServerAudioTurnRef.current = "";
+        window.clearTimeout(speechFallbackTimerRef.current);
+        stopVoiceRecognitionLoop();
+        stopServerAudioPlayback();
         clearAmbientTimers();
         pauseAmbientAudio(true);
         stopCamera();
       };
 
       socket.onmessage = (event) => {
+        if (generation !== socketGenerationRef.current) return;
+        if (clientClosingSocketRef.current === socket) return;
+        if (wsRef.current && wsRef.current !== socket) return;
         let data;
 
         try {
@@ -520,6 +774,8 @@ export default function App() {
         if (eventType === "hud_update") {
           setHud(data);
           setAppMode("hud_active");
+          setUncertainPrompt("");
+          setUncertainCandidates([]);
           pushEvent(
             `Ziel erfasst: ${data.product_identity?.name || "Unbekannt"}`,
             `Target acquired: ${data.product_identity?.name || "Unknown"}`
@@ -530,19 +786,45 @@ export default function App() {
         if (eventType === "speech_text") {
           setSpokenText(data.text || "");
           setAgentState("speaking");
+          const turnId = String(data.turn_id || "");
+          pendingSpeechTurnRef.current = turnId;
+          window.clearTimeout(speechFallbackTimerRef.current);
+          speechFallbackTimerRef.current = window.setTimeout(() => {
+            const hasActiveServerAudio = Boolean(serverAudioRef.current);
+            const hasAudioForTurn = turnId && lastServerAudioTurnRef.current === turnId;
+            if (!hasActiveServerAudio && !hasAudioForTurn) {
+              speakWithBrowserTts(data.text, data.language);
+            } else {
+              window.clearTimeout(speakingResetTimerRef.current);
+              speakingResetTimerRef.current = window.setTimeout(() => {
+                const stillActiveServerAudio = Boolean(serverAudioRef.current);
+                if (!stillActiveServerAudio) {
+                  setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
+                }
+              }, 2800);
+            }
+          }, 2200);
+          return;
+        }
 
-          if (window.speechSynthesis && data.text) {
-            const utterance = new SpeechSynthesisUtterance(data.text);
-            utterance.lang = data.language === "de" ? "de-DE" : "en-US";
-            utterance.onend = () =>
-              setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(utterance);
-          } else {
-            window.clearTimeout(speakingResetTimerRef.current);
-            speakingResetTimerRef.current = window.setTimeout(() => {
-              setAgentState((prev) => (prev === "interrupted" ? prev : "listening"));
-            }, 1200);
+        if (eventType === "speech_audio") {
+          const audioTurnId = String(data.turn_id || "");
+          if (audioTurnId) {
+            lastServerAudioTurnRef.current = audioTurnId;
+            if (pendingSpeechTurnRef.current === audioTurnId) {
+              window.clearTimeout(speechFallbackTimerRef.current);
+            }
+          }
+          if (data.audio_b64) {
+            playServerAudio(data.audio_b64, data.mime_type).then(() => {
+              window.clearTimeout(speechFallbackTimerRef.current);
+            }).catch(() => {
+              setBackendAudioActive(false);
+              pushEvent("Server-Audio Start fehlgeschlagen.", "Server audio playback start failed.");
+              const textFallback = String(spokenTextRef.current || "");
+              if (textFallback) speakWithBrowserTts(textFallback, data.language || language);
+            });
+            pushEvent("Server-Audio empfangen.", "Server audio stream received.");
           }
           return;
         }
@@ -550,6 +832,16 @@ export default function App() {
         if (eventType === "uncertain_match") {
           setAppMode("uncertain_match");
           setAgentState("listening");
+          const options = Array.isArray(data.details?.candidates)
+            ? data.details.candidates.slice(0, 3)
+            : [];
+          setUncertainCandidates(options);
+          setUncertainPrompt(
+            data.message ||
+              (language === "de"
+                ? "Mehrere Treffer gefunden. Bitte waehle das Produkt."
+                : "Multiple matches found. Please choose the product.")
+          );
           pushEvent(
             "Zieldaten mehrdeutig. Manuelle Auswahl erforderlich.",
             "Target data ambiguous. Manual override required."
@@ -571,15 +863,22 @@ export default function App() {
         if (eventType === "tool_call") {
           setAppMode("analyzing");
           setAgentState("processing");
+          setUncertainPrompt("");
+          setUncertainCandidates([]);
         }
 
         if (eventType === "session_state") {
           if ((data.message || "").toLowerCase().includes("started")) {
             setAgentState("listening");
             setAppMode("active_scan");
+            setSessionError("");
+            setUncertainPrompt("");
+            setUncertainCandidates([]);
           }
           if ((data.message || "").toLowerCase().includes("stopped")) {
             setAgentState("disconnected");
+            setUncertainPrompt("");
+            setUncertainCandidates([]);
           }
         }
 
@@ -589,17 +888,32 @@ export default function App() {
     });
 
   const startCamera = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "environment",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true
-      }
-    });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+    } catch {
+      // Fallback: some desktop webcams reject facingMode=environment.
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+    }
 
     mediaStreamRef.current = stream;
 
@@ -608,30 +922,51 @@ export default function App() {
       video.srcObject = stream;
       await video.play();
     }
+    setCameraReady(true);
   };
 
   const startSession = async () => {
-    if (sessionLive) return;
+    if (sessionLive || sessionStartingRef.current || wsStatus === "connecting") return;
+    sessionStartingRef.current = true;
 
     try {
       setWsStatus("connecting");
       setAgentState("connecting");
       setAppMode("active_scan");
       setSpokenText("");
+      setSessionError("");
+      setUncertainPrompt("");
+      setUncertainCandidates([]);
       setAudioUnlocked(true);
+      clearAmbientTimers();
+      pauseAmbientAudio(true);
+      closeSocket();
       await startCamera();
       await connectSocket();
       setSessionLive(true);
       startFrameLoop();
       startAudioCapture();
       pushEvent("Uplink etabliert (A/V).", "Uplink established (A/V).");
-    } catch {
+    } catch (error) {
       stopCamera();
       closeSocket();
       setSessionLive(false);
       setWsStatus("error");
       setAgentState("disconnected");
-      pushEvent("Uplink fehlgeschlagen. Sensoren pruefen.", "Uplink failed. Check sensors.");
+      const detail = error instanceof Error ? error.message : "Unknown startup failure";
+      setSessionError(detail);
+      const fallbackPrompt =
+        language === "de"
+          ? "Kamera oder Mikrofon konnte nicht gestartet werden. Bitte pruefe Berechtigungen und nenne mir alternativ den Produktnamen."
+          : "Camera or microphone could not start. Please check permissions and alternatively tell me the product name.";
+      setSpokenText(fallbackPrompt);
+      speakWithBrowserTts(fallbackPrompt, language);
+      pushEvent(
+        `Uplink fehlgeschlagen. Sensoren pruefen. (${detail})`,
+        `Uplink failed. Check sensors. (${detail})`
+      );
+    } finally {
+      sessionStartingRef.current = false;
     }
   };
 
@@ -641,6 +976,8 @@ export default function App() {
     }
 
     stopCamera();
+    stopVisionProbeLoop();
+    stopVoiceRecognitionLoop();
     closeSocket();
     setSessionLive(false);
     setWsStatus("disconnected");
@@ -648,43 +985,175 @@ export default function App() {
     setAppMode("active_scan");
     setHud(INITIAL_HUD);
     setSpokenText("");
+    setSessionError("");
+    setUncertainPrompt("");
+    setUncertainCandidates([]);
+    pendingSpeechTurnRef.current = "";
+    lastServerAudioTurnRef.current = "";
 
     if (window.speechSynthesis) window.speechSynthesis.cancel();
 
+    window.clearTimeout(speechFallbackTimerRef.current);
+    stopServerAudioPlayback();
     clearAmbientTimers();
     pauseAmbientAudio(true);
     pushEvent("Uplink getrennt.", "Uplink severed.");
   };
 
-  const sendQuery = (queryOverride) => {
+  const sendQuery = (queryOverride, barcodeOverride, options = {}) => {
     const socket = wsRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       pushEvent("Kein Backend-Uplink.", "No backend uplink.");
       return;
     }
 
+    const allowEmpty = Boolean(options.allowEmpty);
+    const silent = Boolean(options.silent);
+    const force = Boolean(options.force);
+    const source = String(options.source || "manual");
     const cleanQuery = (queryOverride ?? queryText).trim();
-    const cleanBarcode = barcodeText.trim();
-    if (!cleanQuery && !cleanBarcode) return;
+    const cleanBarcode = (barcodeOverride ?? barcodeText).trim();
+    if (!cleanQuery && !cleanBarcode && !allowEmpty) return;
+    if (!force && allowEmpty && (agentState === "processing" || agentState === "speaking")) return;
+
+    const signature = `${domain}|${cleanQuery.toLowerCase()}|${cleanBarcode}`;
+    const now = Date.now();
+    const previous = lastSentQueryRef.current;
+    const duplicateWindow = allowEmpty ? 8000 : 2500;
+    if (!force && signature === previous.signature && now - previous.ts < duplicateWindow) {
+      return;
+    }
+    lastSentQueryRef.current = { signature, ts: now };
 
     setAppMode("analyzing");
     setAgentState("processing");
+    setUncertainPrompt("");
+    setUncertainCandidates([]);
 
     socket.send(
       JSON.stringify({
         type: "user_query",
         text: cleanQuery,
         barcode: cleanBarcode,
-        domain
+        domain,
+        source
       })
     );
 
-    pushEvent(
-      cleanQuery ? `Transmitting query: ${cleanQuery}` : `Transmitting code: ${cleanBarcode}`,
-      cleanQuery ? `Transmitting query: ${cleanQuery}` : `Transmitting code: ${cleanBarcode}`
-    );
+    if (!silent) {
+      const message = cleanQuery
+        ? `Transmitting query: ${cleanQuery}`
+        : cleanBarcode
+          ? `Transmitting code: ${cleanBarcode}`
+          : "Transmitting vision probe frame";
+      pushEvent(message, message);
+    }
 
     if (!queryOverride) setQueryText("");
+    if (barcodeOverride !== undefined) setBarcodeText(cleanBarcode);
+  };
+
+  const resolveUncertainMatch = (candidate) => {
+    const name = String(candidate?.name || "").trim();
+    const barcode = String(candidate?.id || "").trim();
+    if (!name && !barcode) return;
+    sendQuery(name, barcode, { force: true });
+    setQueryText("");
+  };
+
+  const startVoiceRecognitionLoop = () => {
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+    if (!sessionLive || wsStatus !== "connected" || !micEnabled) return;
+    if (speechRecognitionRef.current) return;
+
+    const recognition = new SpeechRecognitionCtor();
+    voiceAutoRestartRef.current = true;
+    recognition.lang = languageLocale(language);
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 3;
+
+    recognition.onstart = () => setVoiceListening(true);
+    recognition.onend = () => {
+      setVoiceListening(false);
+      speechRecognitionRef.current = null;
+      if (!voiceAutoRestartRef.current || !sessionLive || wsStatus !== "connected" || !micEnabled) return;
+      window.setTimeout(() => {
+        startVoiceRecognitionLoop();
+      }, 250);
+    };
+    recognition.onerror = (event) => {
+      const errorCode = String(event?.error || "");
+      setVoiceListening(false);
+      if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+        voiceAutoRestartRef.current = false;
+        setMicEnabled(false);
+        pushEvent("Mikrofonzugriff blockiert.", "Microphone permission blocked.");
+      }
+    };
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (!result?.isFinal) continue;
+        if (backendAudioActiveRef.current) continue;
+        if (agentStateRef.current === "speaking" || agentStateRef.current === "processing") continue;
+        const alternatives = Array.from(result || [])
+          .map((item) => ({
+            transcript: String(item?.transcript || "").trim(),
+            confidence: typeof item?.confidence === "number" ? item.confidence : 0
+          }))
+          .filter((item) => item.transcript.length > 0)
+          .sort((a, b) => (b.confidence - a.confidence) || (b.transcript.length - a.transcript.length));
+        const best = alternatives[0];
+        const transcript = best?.transcript || "";
+        if (!transcript) continue;
+
+        const now = Date.now();
+        const normalizedTranscript = transcript.toLowerCase();
+        const spokenSnapshot = String(spokenTextRef.current || "").trim().toLowerCase();
+        if (
+          spokenSnapshot &&
+          normalizedTranscript.length >= 16 &&
+          (spokenSnapshot.includes(normalizedTranscript.slice(0, 24)) ||
+            normalizedTranscript.includes(spokenSnapshot.slice(0, 24)))
+        ) {
+          continue;
+        }
+        if (
+          normalizedTranscript.includes("i cannot find a specific product") ||
+          normalizedTranscript.includes("i cannot determine a specific product") ||
+          normalizedTranscript.includes("please bring the product") ||
+          normalizedTranscript.includes("please show the barcode")
+        ) {
+          continue;
+        }
+        const previous = lastVoiceTranscriptRef.current;
+        if (normalizedTranscript === previous.text && now - previous.ts < 1800) continue;
+        lastVoiceTranscriptRef.current = { text: normalizedTranscript, ts: now };
+
+        const shortUtterance = transcript.split(/\s+/).filter(Boolean).length <= 2;
+        if (best && best.confidence > 0 && best.confidence < 0.45 && shortUtterance) {
+          setQueryText(transcript);
+          pushEvent(
+            `Unsicher erkannt (${Math.round(best.confidence * 100)}%). Bitte wiederholen oder tippen.`,
+            `Low confidence (${Math.round(best.confidence * 100)}%). Please repeat or type it.`
+          );
+          continue;
+        }
+
+        setQueryText(transcript);
+        sendQuery(transcript, undefined, { silent: true, source: "voice" });
+        pushEvent(`Audio decoded: ${transcript}`, `Audio decoded: ${transcript}`);
+      }
+    };
+
+    speechRecognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      speechRecognitionRef.current = null;
+    }
   };
 
   const toggleVoiceInput = () => {
@@ -693,34 +1162,17 @@ export default function App() {
       pushEvent("Audio-Eingabe nicht unterstuetzt.", "Audio input unsupported.");
       return;
     }
-
-    if (voiceListening && speechRecognitionRef.current) {
-      speechRecognitionRef.current.stop();
+    const nextEnabled = !micEnabled;
+    setMicEnabled(nextEnabled);
+    if (!nextEnabled) {
+      stopVoiceRecognitionLoop();
+      pushEvent("Mikrofon stumm.", "Microphone muted.");
       return;
     }
-
-    const recognition = new SpeechRecognitionCtor();
-    recognition.lang = language === "de" ? "de-DE" : "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => setVoiceListening(true);
-    recognition.onend = () => setVoiceListening(false);
-    recognition.onerror = () => {
-      setVoiceListening(false);
-      pushEvent("Audio-Erfassung fehlgeschlagen.", "Audio capture failed.");
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript?.trim() || "";
-      if (!transcript) return;
-      setQueryText(transcript);
-      sendQuery(transcript);
-      pushEvent(`Audio decoded: ${transcript}`, `Audio decoded: ${transcript}`);
-    };
-
-    speechRecognitionRef.current = recognition;
-    recognition.start();
+    pushEvent("Mikrofon aktiv.", "Microphone active.");
+    if (sessionLive && wsStatus === "connected") {
+      startVoiceRecognitionLoop();
+    }
   };
 
   const triggerBargeIn = () => {
@@ -729,6 +1181,8 @@ export default function App() {
     socket.send(JSON.stringify({ type: "barge_in" }));
 
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    window.clearTimeout(speechFallbackTimerRef.current);
+    stopServerAudioPlayback();
 
     setAgentState("interrupted");
     setSpokenText(language === "de" ? "System unterbrochen." : "System halted.");
@@ -745,6 +1199,7 @@ export default function App() {
   useEffect(() => {
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     setVoiceSupported(Boolean(SpeechRecognitionCtor));
+    setScannerSupported(typeof window.BarcodeDetector !== "undefined");
 
     const ambient = new Audio("/Echoes_of_the_Neon_Garden.mp3");
     ambient.preload = "auto";
@@ -773,8 +1228,11 @@ export default function App() {
 
     return () => {
       stopCamera();
+      stopVisionProbeLoop();
       closeSocket();
-      if (speechRecognitionRef.current) speechRecognitionRef.current.stop();
+      stopServerAudioPlayback();
+      stopVoiceRecognitionLoop();
+      window.clearTimeout(speechFallbackTimerRef.current);
       window.clearTimeout(speakingResetTimerRef.current);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       clearAmbientTimers();
@@ -785,6 +1243,54 @@ export default function App() {
       ambientAudioRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!voiceSupported) return;
+    if (
+      sessionLive &&
+      wsStatus === "connected" &&
+      micEnabled &&
+      !backendAudioActive &&
+      agentState !== "speaking" &&
+      agentState !== "processing"
+    ) {
+      startVoiceRecognitionLoop();
+      return;
+    }
+    stopVoiceRecognitionLoop();
+  }, [voiceSupported, sessionLive, wsStatus, micEnabled, language, backendAudioActive, agentState]);
+
+  useEffect(() => {
+    stopVisionProbeLoop();
+
+    const shouldProbe =
+      sessionLive &&
+      wsStatus === "connected" &&
+      cameraReady &&
+      (agentState === "listening" || agentState === "interrupted") &&
+      appMode === "active_scan" &&
+      uncertainCandidates.length === 0;
+    if (!shouldProbe) return undefined;
+
+    visionProbeTimerRef.current = window.setInterval(() => {
+      if (queryText.trim() || barcodeText.trim()) return;
+      sendQuery("", "", { allowEmpty: true, silent: true });
+    }, 8000);
+
+    return () => {
+      stopVisionProbeLoop();
+    };
+  }, [
+    sessionLive,
+    wsStatus,
+    cameraReady,
+    agentState,
+    appMode,
+    voiceListening,
+    uncertainCandidates.length,
+    queryText,
+    barcodeText
+  ]);
 
   useEffect(() => {
     clearAmbientTimers();
@@ -844,11 +1350,26 @@ export default function App() {
             <Play size={12} />
             Demo
           </a>
-          <select value={language} onChange={(event) => setLanguage(event.target.value)} className="nv-select">
-            <option value="de">DE</option>
-            <option value="en">EN</option>
+          <select
+            value={language}
+            onChange={(event) => setLanguage(event.target.value)}
+            className="nv-select"
+            disabled={sessionLive}
+            title={sessionLive ? "Stop session to change language." : "Language"}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
           </select>
-          <select value={domain} onChange={(event) => setDomain(event.target.value)} className="nv-select">
+          <select
+            value={domain}
+            onChange={(event) => setDomain(event.target.value)}
+            className="nv-select"
+            disabled={sessionLive}
+            title={sessionLive ? "Stop session to change domain." : "Domain"}
+          >
             <option value="food">Food</option>
             <option value="beauty">Cosmetics</option>
           </select>
@@ -862,10 +1383,10 @@ export default function App() {
         <section className="nv-grid">
           <div className="nv-left-col">
             <article className="nv-camera-card anim-slide-up d-2">
-              <video ref={videoRef} autoPlay playsInline muted className="nv-video" />
+              <video ref={videoRef} autoPlay playsInline muted className={`nv-video ${cameraReady ? "is-active" : ""}`} />
               <canvas ref={canvasRef} className="nv-hidden-canvas" />
 
-              <div className="nv-camera-overlay" />
+              <div className={`nv-camera-overlay ${cameraReady ? "is-live" : ""}`} />
               <div className="nv-camera-grid" />
 
               <div className="nv-hud-top">
@@ -877,17 +1398,17 @@ export default function App() {
                 <div className="nv-hud-right">
                   <button
                     type="button"
-                    className={`nv-hud-btn ${voiceListening ? "is-active" : ""}`}
+                    className={`nv-hud-btn ${micEnabled ? "is-active" : ""}`}
                     onClick={toggleVoiceInput}
                     disabled={!voiceSupported}
-                    title="Voice input"
+                    title={micEnabled ? "Mute voice input" : "Enable voice input"}
                   >
-                    {voiceListening ? <Mic size={13} /> : <MicOff size={13} />}
+                    {micEnabled ? <Mic size={13} /> : <MicOff size={13} />}
                   </button>
 
                   <span className="nv-listen-pill">
                     <AudioLines size={11} />
-                    {voiceListening ? "Listening" : "Muted"}
+                    {voiceListening ? "Listening" : micEnabled ? "Armed" : "Muted"}
                   </span>
                 </div>
               </div>
@@ -971,17 +1492,45 @@ export default function App() {
 
               <button
                 type="button"
-                className="nv-icon-btn"
+                className={`nv-session-btn ${sessionLive ? "is-stop" : "is-start"}`}
                 onClick={sessionLive ? stopSession : startSession}
                 title={sessionLive ? "Stop session" : "Start session"}
+                disabled={wsStatus === "connecting"}
               >
-                <Play size={13} />
+                {sessionLive ? <Circle size={13} /> : <Play size={13} />}
+                {sessionLive
+                  ? language === "de"
+                    ? "SESSION STOPPEN"
+                    : "STOP SESSION"
+                  : language === "de"
+                    ? "SESSION STARTEN"
+                    : "START SESSION"}
               </button>
 
               <button type="button" className="nv-send-btn" onClick={() => sendQuery()}>
                 <SendIcon />
                 SENDEN
               </button>
+            </article>
+
+            <article className="nv-runtime-strip anim-slide-up d-3">
+              <div>
+                <span>WS</span>
+                <strong>{wsEndpoint}</strong>
+              </div>
+              <div>
+                <span>CAM</span>
+                <strong>{cameraReady ? "READY" : "OFF"}</strong>
+              </div>
+              <div>
+                <span>SCAN</span>
+                <strong>{scannerSupported ? "AUTO" : "MANUAL"}</strong>
+              </div>
+              <div>
+                <span>AUDIO</span>
+                <strong>{backendAudioActive ? "MODEL" : "TEXT/TTS"}</strong>
+              </div>
+              {sessionError && <p>{sessionError}</p>}
             </article>
           </div>
 
@@ -1032,6 +1581,36 @@ export default function App() {
                 Hinweis: Nur zu Informationszwecken. Keine medizinische Beratung.
               </footer>
             </article>
+
+            {uncertainCandidates.length > 0 && (
+              <article className="nv-panel nv-candidate-panel anim-slide-right d-5">
+                <header>
+                  <span>
+                    <HelpCircle size={12} />
+                    MATCH CLARIFICATION
+                  </span>
+                </header>
+                <p className="nv-candidate-prompt">
+                  {uncertainPrompt ||
+                    (language === "de"
+                      ? "Bitte waehle das richtige Produkt."
+                      : "Please choose the correct product.")}
+                </p>
+                <div className="nv-candidate-list">
+                  {uncertainCandidates.map((candidate) => (
+                    <button
+                      key={`${candidate.id}-${candidate.name}`}
+                      type="button"
+                      className="nv-candidate-item"
+                      onClick={() => resolveUncertainMatch(candidate)}
+                    >
+                      <strong>{candidate.name || candidate.id}</strong>
+                      <small>{candidate.id}</small>
+                    </button>
+                  ))}
+                </div>
+              </article>
+            )}
 
             <article className="nv-panel nv-kpi-panel anim-slide-right d-6">
               <div className="nv-kpi-grid">
