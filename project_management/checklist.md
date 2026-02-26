@@ -49,7 +49,7 @@ Use this as a gate-based checklist. A gate closes only when all mandatory items 
   - Cloud Run project auto-detection,
   - native voice generation enabled (prebuilt voice left provider-managed for natural variation).
 - [x] Local validation green:
-  - [x] backend tests (`27 passed`)
+  - [x] backend tests (`30 passed`)
   - [x] frontend build (`vite build`)
 
 ### Not Done

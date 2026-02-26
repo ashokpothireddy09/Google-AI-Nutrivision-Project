@@ -348,8 +348,47 @@ def test_websocket_voice_noise_without_frame_hint_skips_catalog_lookup(monkeypat
     _run(main_module.live_session(websocket))
 
     session_events = _events_by_type(websocket.sent, "session_state")
-    assert any("voice query unclear" in str(event.get("message", "")).lower() for event in session_events)
+    assert any("clearer product signal" in str(event.get("message", "")).lower() for event in session_events)
     assert len(_events_by_type(websocket.sent, "uncertain_match")) >= 1
+
+
+def test_websocket_low_match_candidates_emit_uncertain_match(monkeypatch) -> None:
+    async def fake_infer_query_from_frame(*, latest_frame, domain: str, language: str):
+        assert latest_frame is not None
+        return None
+
+    async def fake_get_product_by_barcode(*args, **kwargs):
+        return BarcodeToolResult(found=False)
+
+    async def fake_search_product_catalog(*, query_text: str, **kwargs):
+        assert query_text.lower().strip() == "kelly family"
+        candidates = [
+            SearchCandidate(id="111", name="Awesome Nut and Chew Bar", confidence=0.82),
+            SearchCandidate(id="222", name="Salted Pretzel Snack", confidence=0.73),
+            SearchCandidate(id="333", name="Organic Oat Cereal", confidence=0.64),
+        ]
+        return SearchToolResult(candidates=candidates, selected_candidate=candidates[0])
+
+    monkeypatch.setattr(main_module, "_infer_query_from_frame", fake_infer_query_from_frame)
+    monkeypatch.setattr(main_module, "get_product_by_barcode", fake_get_product_by_barcode)
+    monkeypatch.setattr(main_module, "search_product_catalog", fake_search_product_catalog)
+
+    websocket = _MockWebSocket(
+        incoming=[
+            {"type": "session_start", "domain": "food", "language": "en"},
+            {"type": "frame", "image_b64": "data:image/jpeg;base64,AAAA"},
+            {"type": "user_query", "text": "Kelly Family", "barcode": "", "domain": "food", "source": "voice"},
+        ]
+    )
+
+    _run(main_module.live_session(websocket))
+
+    assert len(_events_by_type(websocket.sent, "hud_update")) == 0
+    uncertain_events = _events_by_type(websocket.sent, "uncertain_match")
+    assert len(uncertain_events) == 1
+    details = uncertain_events[0].get("details") or {}
+    assert isinstance(details.get("candidates"), list)
+    assert details.get("match_score") == 0.0
 
 
 def test_normalize_catalog_query_filters_agent_echo_text() -> None:
@@ -387,6 +426,31 @@ def test_websocket_social_greeting_emits_conversational_reply(monkeypatch) -> No
     assert len(_events_by_type(websocket.sent, "tool_call")) == 0
 
 
+def test_websocket_social_how_are_you_emits_conversational_reply(monkeypatch) -> None:
+    async def fake_get_product_by_barcode(*args, **kwargs):
+        raise AssertionError("Barcode lookup should not run for greeting turns")
+
+    async def fake_search_product_catalog(*args, **kwargs):
+        raise AssertionError("Catalog lookup should not run for greeting turns")
+
+    monkeypatch.setattr(main_module, "get_product_by_barcode", fake_get_product_by_barcode)
+    monkeypatch.setattr(main_module, "search_product_catalog", fake_search_product_catalog)
+
+    websocket = _MockWebSocket(
+        incoming=[
+            {"type": "session_start", "domain": "food", "language": "en"},
+            {"type": "user_query", "text": "how are you today", "barcode": "", "domain": "food", "source": "voice"},
+        ]
+    )
+
+    _run(main_module.live_session(websocket))
+
+    speech_events = _events_by_type(websocket.sent, "speech_text")
+    assert any("show me the product" in event["text"].lower() for event in speech_events)
+    assert len(_events_by_type(websocket.sent, "uncertain_match")) == 0
+    assert len(_events_by_type(websocket.sent, "tool_call")) == 0
+
+
 def test_websocket_social_identity_emits_agent_intro(monkeypatch) -> None:
     async def fake_get_product_by_barcode(*args, **kwargs):
         raise AssertionError("Barcode lookup should not run for identity turns")
@@ -410,6 +474,45 @@ def test_websocket_social_identity_emits_agent_intro(monkeypatch) -> None:
     assert any("nutrition agent" in event["text"].lower() for event in speech_events)
     assert len(_events_by_type(websocket.sent, "uncertain_match")) == 0
     assert len(_events_by_type(websocket.sent, "tool_call")) == 0
+
+
+def test_websocket_social_camera_check_can_trigger_frame_recognition(monkeypatch) -> None:
+    captured_query: dict[str, str] = {}
+
+    async def fake_infer_query_from_frame(*, latest_frame, domain: str, language: str):
+        assert latest_frame is not None
+        return "lays classic"
+
+    async def fake_get_product_by_barcode(*args, **kwargs):
+        return BarcodeToolResult(found=False)
+
+    async def fake_search_product_catalog(*, query_text: str, **kwargs):
+        captured_query["query_text"] = query_text
+        candidate = SearchCandidate(id="9999999999999", name="Lay's Classic Chips", confidence=0.78)
+        return SearchToolResult(candidates=[candidate], selected_candidate=candidate)
+
+    async def fake_refine_text(**kwargs):
+        return main_module.GeminiLiveResult(text="Model fallback verdict.", audio_chunks=[])
+
+    monkeypatch.setattr(main_module, "_infer_query_from_frame", fake_infer_query_from_frame)
+    monkeypatch.setattr(main_module, "get_product_by_barcode", fake_get_product_by_barcode)
+    monkeypatch.setattr(main_module, "search_product_catalog", fake_search_product_catalog)
+    monkeypatch.setattr(main_module, "_gemini_live_refine_text", fake_refine_text)
+
+    websocket = _MockWebSocket(
+        incoming=[
+            {"type": "session_start", "domain": "food", "language": "en"},
+            {"type": "frame", "image_b64": "data:image/jpeg;base64,AAAA"},
+            {"type": "user_query", "text": "what are you seeing", "barcode": "", "domain": "food", "source": "voice"},
+        ]
+    )
+
+    _run(main_module.live_session(websocket))
+
+    assert captured_query.get("query_text") == "lays classic chips"
+    tool_events = _events_by_type(websocket.sent, "tool_call")
+    assert any("Voice query corrected by frame hint" in event["message"] for event in tool_events)
+    assert len(_events_by_type(websocket.sent, "hud_update")) == 1
 
 
 def test_websocket_no_product_phrase_emits_structured_guidance(monkeypatch) -> None:

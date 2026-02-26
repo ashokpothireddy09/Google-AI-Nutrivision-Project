@@ -17,10 +17,13 @@ This file is the single daily status view.
 - Coalesced Gemini model audio chunks before websocket emission:
   - PCM/L16 chunks are merged and wrapped once as WAV.
   - non-PCM responses are reduced to a single best chunk to avoid frontend playback thrash.
+- Fixed Gemini Live text assembly drift by selecting the best final text chunk (no streaming concat artifacts) and hard-limiting responses to two sentences.
+- Fixed occasional missing-space artifacts in Gemini Live text parts (prevents strings like `Based onwhat'svisible`).
 - Hardened frontend model-audio playback:
   - decode data URL/base64 to Blob + object URL,
   - clean object URL lifecycle/revocation,
   - browser TTS fallback if model-audio start fails.
+- HUD metrics now show per-100g values (for example `2.1 g/100g`) instead of misleading percent labels; bars still represent internal scores.
 - Prevented duplicate live-session startup races:
   - startup re-entry guard (`sessionStartingRef`),
   - stale websocket event guard in `onmessage/onerror/onclose`.
@@ -32,12 +35,15 @@ This file is the single daily status view.
   - low-signal queries (for example `hello`) trigger frame-based product hint inference,
   - normalized hint mapping for Lay's-style packets (`lays classic chips`),
   - secondary frame-hint retry when first catalog search misses.
+- Camera-intent prompts (for example `what are you seeing`) now trigger frame-based recognition instead of only conversational guidance.
 - Conversational turn routing improved:
   - social/identity intents (for example `good morning`, `who are you`) now receive direct spoken agent responses instead of product-search uncertainty.
   - no-product intents (for example `I don't have it with me`) trigger structured step-by-step guidance (name word-by-word, brand, nutrition values, barcode/photo fallback).
 - Catalog fallback robustness improved for snack products:
   - Lay's-style query variants are expanded automatically (`lays classic chips`, `lays chips`, `lays`),
   - locale fallback retry (`de` -> `en` -> `world/en`) is applied when initial search is empty.
+- Catalog fallback now rejects low-match candidates to avoid wrong product matches (emits `uncertain_match` instead of false confidence).
+- Frame-hint inference now rejects slogan-like outputs (prevents "Target acquired: do whats natural") and explicitly instructs the model to ignore marketing slogans.
 - Whole-food fallback coverage improved for unpackaged fruit wording:
   - expanded aliases for apple/banana/orange variants (`apples`, `red apple`, `green apple`, etc.).
 - Frontend speech playback handoff improved:
@@ -47,6 +53,7 @@ This file is the single daily status view.
   - Vertex path enabled by default,
   - project auto-detection from Cloud Run env (`GOOGLE_CLOUD_PROJECT`/`GCP_PROJECT`),
   - native audio response path prioritized with retry when first response misses audio.
+- Added `/health?verbose=true` to expose Gemini runtime config and whether the Gemini client is available in the deployed environment.
 
 ### Remaining blockers for next developer (explicit)
 
@@ -71,7 +78,7 @@ This file is the single daily status view.
 - Anti-echo protections are implemented (agent speech is filtered from re-query loop).
 - Backside prompt flow is implemented when nutrition/ingredient data is incomplete.
 - Local quality gates pass:
-  - backend tests: `25 passed`,
+  - backend tests: `30 passed`,
   - frontend production build: success.
 - Cloud deployment exists and is reachable (backend + frontend URLs already documented).
 
@@ -154,7 +161,7 @@ This file is the single daily status view.
 
 ### Tests
 
-- Backend tests passing locally: `25 passed`.
+- Backend tests passing locally: `30 passed`.
   - includes websocket contract/integration tests,
   - tool schema + source-failure fallback tests,
   - cache behavior tests,
@@ -225,6 +232,13 @@ This file is the single daily status view.
     - camera-intent phrase routing (`what are you seeing`, `what is it`, `in front of me`),
     - frame-hint-first correction for noisy voice turns,
     - unresolved noisy turns now avoid blind OFF search and fall back to clarification flow.
+  - additional evidence from later run (2026-02-25 ~16:42-16:43):
+    - `Target acquired: do whats natural` after showing Lay's packet (frame hint captured marketing slogan instead of product name),
+    - `which country are you` did not trigger an identity response.
+  - mitigation added in code:
+    - frame-hint sanitizer rejects slogan-like phrases (prevents false catalog matches),
+    - expanded social identity markers to include `which country are you`,
+    - catalog fallback gates low-match candidates (avoids wrong product selection when OFF results do not match query tokens).
 
 ### Documentation cleanup
 
@@ -258,7 +272,11 @@ This file is the single daily status view.
    - no ambient music during active live session,
    - backside nutrition prompt appears when fields are incomplete.
    - explicit open issue from field run (2026-02-25 14:37 and 15:59-16:01 local): yellow Lay's packet not reliably recognized; STT drift can still push wrong catalog candidates.
-   - status: backend fallback logic patched (query/locale retries + voice-noise guards + camera-intent routing); field validation still required.
+   - status: backend fallback logic patched (query/locale retries + voice-noise guards + camera-intent routing + slogan rejection + low-match gating); field validation still required.
+   - add explicit runtime proofs:
+     - `GET /health?verbose=true` shows `gemini.client_available=true` on the deployed backend,
+     - saying `which country are you` produces a short spoken identity reply,
+     - typing `lays` must not result in a generic non-Lay's product; if OFF results do not contain Lay's tokens, backend should emit `uncertain_match` instead.
 2. Set budget guardrail settings (`enable_budget_alerts`, `billing_account_id`) and apply.
 3. Optionally sync manual Cloud Run deploy with Terraform state strategy (or keep manual path for hackathon speed).
 

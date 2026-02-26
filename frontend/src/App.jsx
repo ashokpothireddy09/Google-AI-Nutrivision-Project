@@ -1436,7 +1436,11 @@ export default function App() {
                     <div key={`${row.label}-${index}`} className="nv-analysis-item">
                       <div className="nv-analysis-head">
                         <span>{row.label}</span>
-                        <strong>{Math.round(row.score)}%</strong>
+                        <strong>
+                          {hasLiveHud
+                            ? (row.value || `${Math.round(row.score)}/100`)
+                            : `${Math.round(row.score)}%`}
+                        </strong>
                       </div>
                       <div className="nv-progress">
                         <i

@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 import uuid
 import wave
 from dataclasses import dataclass
@@ -45,8 +46,29 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health(verbose: bool = False) -> dict[str, Any]:
+    payload: dict[str, Any] = {"status": "ok"}
+    if not verbose:
+        return payload
+
+    project_id = (
+        settings.gcp_project_id
+        or os.getenv("GOOGLE_CLOUD_PROJECT")
+        or os.getenv("GCP_PROJECT")
+        or os.getenv("PROJECT_ID")
+    )
+    client = _build_gemini_client()
+    payload["version"] = {"git_sha": os.getenv("GIT_SHA") or "unknown"}
+    payload["gemini"] = {
+        "client_available": bool(client) and genai_types is not None,
+        "use_vertex": settings.gemini_use_vertex,
+        "project_id": project_id or "",
+        "location": settings.gcp_location,
+        "model": settings.gemini_model,
+        "live_model": _resolve_live_model_name(),
+        "live_output_audio": settings.gemini_live_output_audio,
+    }
+    return payload
 
 
 def _extract_barcode(text: str) -> str | None:
@@ -223,6 +245,11 @@ SOCIAL_GREETING_MARKERS = (
     "hallo",
     "hi",
     "hey",
+    "how are you",
+    "how are you doing",
+    "how is it going",
+    "how s it going",
+    "hows it going",
     "good morning",
     "good afternoon",
     "good evening",
@@ -232,6 +259,9 @@ SOCIAL_GREETING_MARKERS = (
     "guten tag",
     "guten abend",
     "servus",
+    "wie geht es",
+    "wie geht s",
+    "wie gehts",
 )
 
 SOCIAL_IDENTITY_MARKERS = (
@@ -245,6 +275,9 @@ SOCIAL_IDENTITY_MARKERS = (
     "was kannst du",
     "wer spricht",
     "which country do you belong",
+    "which country are you",
+    "which country are you from",
+    "what country are you from",
     "where are you from",
     "woher kommst du",
 )
@@ -332,6 +365,83 @@ PRODUCT_CONTEXT_TOKENS = {
 def _normalized_words(text: str) -> list[str]:
     lowered = re.sub(r"[^a-z0-9 ]", " ", text.lower())
     return [token for token in re.split(r"\s+", lowered) if token]
+
+
+def _fold_to_ascii(text: str) -> str:
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    return normalized.encode("ascii", "ignore").decode("ascii")
+
+
+def _match_tokens(text: str) -> set[str]:
+    # Used only for "does this candidate match the query" heuristics.
+    folded = _fold_to_ascii(str(text or ""))
+    lowered = (
+        folded.lower()
+        .replace("lay’s", "lays")
+        .replace("lay's", "lays")
+    )
+    cleaned = re.sub(r"[^a-z0-9 ]", " ", lowered)
+    raw_tokens = [token for token in re.split(r"\s+", cleaned) if token]
+    filtered = [
+        token
+        for token in raw_tokens
+        if token not in QUERY_FILLER_TOKENS and token not in VOICE_NOISE_ACTION_TOKENS
+    ]
+    expanded: set[str] = set()
+    for token in filtered:
+        if len(token) <= 2 and not token.isdigit():
+            continue
+        expanded.add(token)
+        if token.endswith("s") and len(token) > 4:
+            expanded.add(token[:-1])
+    return expanded
+
+
+def _candidate_match_score(query_text: str, candidate_name: str) -> float:
+    query_tokens = _match_tokens(query_text)
+    candidate_tokens = _match_tokens(candidate_name)
+    if not query_tokens or not candidate_tokens:
+        return 0.0
+    if "lays" in query_tokens and "lays" not in candidate_tokens:
+        return 0.0
+    overlap = query_tokens.intersection(candidate_tokens)
+    return len(overlap) / max(1, len(query_tokens))
+
+
+def _min_catalog_match_score(query_text: str) -> float:
+    token_count = len(_match_tokens(query_text))
+    if token_count <= 0:
+        return 1.1
+    if token_count == 1:
+        return 1.0
+    if token_count == 2:
+        return 0.5
+    return 0.34
+
+
+def _pick_best_catalog_candidate(
+    *,
+    query_text: str,
+    candidates: list[SearchCandidate],
+) -> tuple[SearchCandidate | None, float]:
+    if not candidates:
+        return None, 0.0
+    scored: list[tuple[float, float, SearchCandidate]] = []
+    for candidate in candidates:
+        match_score = _candidate_match_score(query_text, candidate.name)
+        scored.append((match_score, candidate.confidence, candidate))
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    best_match_score, _, best = scored[0]
+    return best, best_match_score
+
+
+def _is_short_voice_query(text: str) -> bool:
+    words = _normalized_words(text or "")
+    if not words:
+        return True
+    return len(words) <= 3
 
 
 def _lookup_whole_food_profile(query_text: str) -> dict[str, Any] | None:
@@ -676,6 +786,16 @@ def _pick_language(language: str, de_text: str, en_text: str) -> str:
     return de_text if language == "de" else en_text
 
 
+def _limit_to_two_sentences(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(text or "").strip()).strip(" \t\r\n\"'`")
+    if not cleaned:
+        return ""
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
+    if len(parts) <= 2:
+        return cleaned
+    return " ".join(parts[:2]).strip()
+
+
 def _nutrition_table_prompt(language: str) -> str:
     if language == "de":
         return (
@@ -831,6 +951,35 @@ def _extract_audio_parts(message: Any) -> list[tuple[str, bytes]]:
     return chunks
 
 
+def _merge_text_parts(parts: list[str]) -> str:
+    merged = ""
+    for part in parts:
+        text = str(part or "")
+        if not text.strip():
+            continue
+        if not merged:
+            merged = text
+            continue
+
+        left = merged[-1]
+        right = text[0]
+        if left.isspace() or right.isspace():
+            merged += text
+        elif right in ",.;:!?)]}":
+            merged += text
+        elif right in ("'", "’"):
+            merged += text
+        elif left in "([{":
+            merged += text
+        else:
+            merged += f" {text}"
+
+    merged = re.sub(r"\s+([,.;:!?])", r"\1", merged)
+    merged = re.sub(r"(’|')\s+", r"\1", merged)
+    merged = re.sub(r"\s+", " ", merged)
+    return merged.strip()
+
+
 def _extract_model_turn_text(message: Any) -> str:
     server_content = getattr(message, "server_content", None)
     if not server_content:
@@ -843,7 +992,7 @@ def _extract_model_turn_text(message: Any) -> str:
         part_text = getattr(part, "text", None)
         if isinstance(part_text, str) and part_text.strip():
             texts.append(part_text)
-    return "".join(texts).strip()
+    return _merge_text_parts(texts)
 
 
 def _extract_output_transcription(message: Any) -> str:
@@ -936,6 +1085,12 @@ def _sanitize_frame_hint(raw_text: str) -> str | None:
     cleaned = re.sub(r"[^0-9A-Za-z\- ]", "", cleaned).strip()
     if len(cleaned) < 3:
         return None
+    tokens = _normalized_words(_fold_to_ascii(cleaned))
+    if tokens and not any(token.isdigit() for token in tokens):
+        # Reject slogan-like outputs that cause false catalog matches (for example "do whats natural").
+        reject_tokens = {"do", "whats", "which", "are", "you"}
+        if any(token in reject_tokens for token in tokens):
+            return None
     return cleaned[:64]
 
 
@@ -962,6 +1117,8 @@ async def _infer_query_from_frame(
         "Use empty strings for unknown keys. "
         "If barcode is visible, include digits in barcode and keep query empty. "
         "If barcode is not visible, set query to '<brand> <product>' (max six words) using visible package text. "
+        "Ignore marketing slogans and generic claims; do not output phrases like 'do whats natural'. "
+        "If you cannot find a clear brand/product name, leave query empty. "
         "If unpackaged produce is visible, set query to a single item name (apple, banana, or orange). "
         "Prefer exact visible brand/logo words over generic terms like snack or packet. "
         "Do not write full sentences."
@@ -1080,22 +1237,22 @@ async def _gemini_live_refine_text(
                 turn_complete=True,
             )
 
-            chunks: list[str] = []
+            best_text = ""
             audio_chunks: list[tuple[str, bytes]] = []
             async with asyncio.timeout(settings.gemini_live_timeout_seconds):
                 async for message in session.receive():
                     model_text = _extract_model_turn_text(message)
-                    if model_text and (not chunks or chunks[-1] != model_text):
-                        chunks.append(model_text)
+                    if model_text and len(model_text) >= len(best_text):
+                        best_text = model_text
                     transcription_text = _extract_output_transcription(message)
-                    if transcription_text and (not chunks or chunks[-1] != transcription_text):
-                        chunks.append(transcription_text)
+                    if transcription_text and len(transcription_text) >= len(best_text):
+                        best_text = transcription_text
                     if settings.gemini_live_output_audio:
                         audio_chunks.extend(_extract_audio_parts(message))
                     server_content = message.server_content
                     if server_content and (server_content.turn_complete or server_content.generation_complete):
                         break
-            refined = "".join(chunks).strip()
+            refined = _limit_to_two_sentences(best_text)
             coalesced_audio = _coalesce_model_audio(audio_chunks)
             return GeminiLiveResult(text=refined or default_text, audio_chunks=coalesced_audio)
     except TimeoutError:
@@ -1390,13 +1547,66 @@ async def live_session(websocket: WebSocket) -> None:
             query_source = str(incoming.get("source") or "manual").strip().lower()
             query_text = _normalize_catalog_query(raw_query_text)
             barcode = str(incoming.get("barcode") or "").strip() or _extract_barcode(raw_query_text)
+            camera_intent = False
+
+            expiry_guidance = _expiry_guidance_from_text(query_text, language)
+            if expiry_guidance and not barcode:
+                await _send_speech(
+                    websocket,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    text=expiry_guidance,
+                    language=language,
+                )
+                await _send_simple(
+                    websocket,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    event_type="session_state",
+                    message="Expiration guidance returned",
+                )
+                continue
+
+            social_intent = _classify_social_intent(raw_query_text) if raw_query_text and not barcode else None
+            if social_intent == "camera_check":
+                camera_intent = True
+            elif social_intent:
+                uncertain_streak = 0
+                conversational_prompt = _social_prompt(language, social_intent)
+                await _send_model_speech(
+                    websocket,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    language=language,
+                    domain=domain,
+                    prompt_text=conversational_prompt,
+                    latest_frame=latest_frame,
+                    latest_audio=latest_audio,
+                    user_query=raw_query_text,
+                )
+                await _send_simple(
+                    websocket,
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    event_type="session_state",
+                    message="Turn complete",
+                )
+                continue
+
             voice_noise_detected = _is_voice_noise_query(raw_query_text)
+            short_voice_query = (
+                query_source == "voice"
+                and _is_short_voice_query(raw_query_text)
+                and _lookup_whole_food_profile(query_text) is None
+            )
             should_use_frame_hint = (
                 not barcode
                 and latest_frame is not None
                 and (
-                    _is_low_signal_query(query_text)
+                    camera_intent
+                    or _is_low_signal_query(query_text)
                     or voice_noise_detected
+                    or short_voice_query
                 )
             )
             if should_use_frame_hint:
@@ -1431,14 +1641,19 @@ async def live_session(websocket: WebSocket) -> None:
                             ),
                             details={"query_text": query_text, "source": query_source},
                         )
-                elif voice_noise_detected:
+                elif voice_noise_detected or camera_intent:
                     query_text = ""
+                    unclear_message = (
+                        "Voice query unclear; waiting for clearer product signal"
+                        if query_source == "voice"
+                        else "Waiting for clearer product signal"
+                    )
                     await _send_simple(
                         websocket,
                         session_id=session_id,
                         turn_id=turn_id,
                         event_type="session_state",
-                        message="Voice query unclear; waiting for clearer product signal",
+                        message=unclear_message,
                     )
 
             turn_signature = ((barcode or "").strip(), (query_text or "").strip().lower())
@@ -1455,35 +1670,16 @@ async def live_session(websocket: WebSocket) -> None:
             last_turn_signature = turn_signature
             last_turn_signature_at = now_monotonic
 
-            expiry_guidance = _expiry_guidance_from_text(query_text, language)
-            if expiry_guidance and not barcode:
-                await _send_speech(
-                    websocket,
-                    session_id=session_id,
-                    turn_id=turn_id,
-                    text=expiry_guidance,
-                    language=language,
-                )
-                await _send_simple(
-                    websocket,
-                    session_id=session_id,
-                    turn_id=turn_id,
-                    event_type="session_state",
-                    message="Expiration guidance returned",
-                )
-                continue
-
-            social_intent = _classify_social_intent(raw_query_text) if raw_query_text and not barcode else None
-            if social_intent:
+            if camera_intent and not barcode and not query_text:
                 uncertain_streak = 0
-                conversational_prompt = _social_prompt(language, social_intent)
+                camera_prompt = _social_prompt(language, "camera_check")
                 await _send_model_speech(
                     websocket,
                     session_id=session_id,
                     turn_id=turn_id,
                     language=language,
                     domain=domain,
-                    prompt_text=conversational_prompt,
+                    prompt_text=camera_prompt,
                     latest_frame=latest_frame,
                     latest_audio=latest_audio,
                     user_query=raw_query_text,
@@ -1646,7 +1842,83 @@ async def live_session(websocket: WebSocket) -> None:
                             max_results=5,
                         )
 
-                if search_result.selected_candidate:
+                if search_result.candidates:
+                    chosen, match_score = _pick_best_catalog_candidate(
+                        query_text=query_text,
+                        candidates=search_result.candidates,
+                    )
+                    if chosen is None:
+                        match_score = 0.0
+                    min_match_score = _min_catalog_match_score(query_text)
+                    close_alternatives: list[SearchCandidate] = []
+                    if chosen is not None:
+                        for candidate in search_result.candidates:
+                            if candidate.id == chosen.id:
+                                continue
+                            candidate_score = _candidate_match_score(query_text, candidate.name)
+                            if candidate_score >= min_match_score and abs(candidate_score - match_score) <= 0.12:
+                                close_alternatives.append(candidate)
+                            if len(close_alternatives) >= 1:
+                                break
+
+                    if chosen is None or match_score < min_match_score:
+                        uncertain_streak += 1
+                        candidates_payload = [candidate.model_dump() for candidate in search_result.candidates[:3]]
+                        uncertain_text = _pick_language(
+                            language,
+                            "Ich habe Treffer gefunden, bin aber noch nicht sicher. Bitte waehle das richtige Produkt oder zeig den Barcode bzw. die Rueckseite mit Zutaten und Naehrwerten.",
+                            "I found possible matches, but I am not confident yet. Please choose the correct product or show the barcode / backside ingredients and nutrition table.",
+                        )
+                        await _send_simple(
+                            websocket,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            event_type="uncertain_match",
+                            message=uncertain_text,
+                            details={"candidates": candidates_payload, "match_score": round(match_score, 3)},
+                        )
+                        await _send_model_speech(
+                            websocket,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            language=language,
+                            domain=domain,
+                            prompt_text=uncertain_text,
+                            latest_frame=latest_frame,
+                            latest_audio=latest_audio,
+                            user_query=raw_query_text or query_text,
+                        )
+                        continue
+
+                    if close_alternatives:
+                        top_two = [chosen, close_alternatives[0]]
+                        options_text = (" oder " if language == "de" else " or ").join(candidate.name for candidate in top_two)
+                        disambiguation_text = (
+                            f"Mehrere Treffer passen: {options_text}. Welches Produkt meinst du?"
+                            if language == "de"
+                            else f"Multiple matches fit: {options_text}. Which product do you mean?"
+                        )
+                        await _send_simple(
+                            websocket,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            event_type="uncertain_match",
+                            message=disambiguation_text,
+                            details={"candidates": [candidate.model_dump() for candidate in top_two]},
+                        )
+                        await _send_model_speech(
+                            websocket,
+                            session_id=session_id,
+                            turn_id=turn_id,
+                            language=language,
+                            domain=domain,
+                            prompt_text=disambiguation_text,
+                            latest_frame=latest_frame,
+                            latest_audio=latest_audio,
+                            user_query=raw_query_text or query_text,
+                        )
+                        continue
+
                     disambiguation = _build_disambiguation(candidates=search_result.candidates, language=language)
                     if disambiguation:
                         disambiguation_text, candidates_payload = disambiguation
@@ -1671,7 +1943,6 @@ async def live_session(websocket: WebSocket) -> None:
                         )
                         continue
 
-                    chosen: SearchCandidate = search_result.selected_candidate
                     identity = ProductIdentity(id=chosen.id, name=chosen.name, brand="Catalog match")
                     confidence = chosen.confidence
 
