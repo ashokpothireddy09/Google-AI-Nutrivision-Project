@@ -9,6 +9,7 @@ EventType = Literal[
     "tool_call",
     "hud_update",
     "speech_text",
+    "speech_audio",
     "uncertain_match",
     "barge_ack",
     "error",
@@ -56,7 +57,16 @@ class SpeechEvent(BaseModel):
     session_id: str
     turn_id: str
     text: str
-    language: Literal["de", "en"]
+    language: Literal["de", "en", "es", "fr", "hi", "it", "pt"]
+
+
+class SpeechAudioEvent(BaseModel):
+    event_type: Literal["speech_audio"] = "speech_audio"
+    session_id: str
+    turn_id: str
+    audio_b64: str
+    mime_type: str
+    language: Literal["de", "en", "es", "fr", "hi", "it", "pt"]
 
 
 class SimpleEvent(BaseModel):

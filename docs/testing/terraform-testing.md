@@ -11,6 +11,8 @@ Main stack (`infra/terraform/environments/prod`):
 - Artifact Registry
 - Secret Manager secrets
 - Cloud Run service
+- Optional frontend Cloud Run service
+- Optional monthly budget guardrail
 - Optional Memorystore
 - Optional Cloud SQL
 
@@ -91,17 +93,27 @@ terraform plan -var-file=terraform.tfvars
 terraform apply -var-file=terraform.tfvars
 ```
 
+If using API-key mode, ensure `secret_names` and `secret_env_mappings` include `gemini_api_key` before apply.
+
 ## 9) Post-apply verification
 
 ```bash
 terraform output -raw cloud_run_service_uri
 URI=$(terraform output -raw cloud_run_service_uri)
 curl "$URI/health"
+curl "$URI/health?verbose=true"
 ```
 
 Expected:
 
 - Health response: `{"status":"ok"}`
+- Verbose health includes active Gemini runtime config. Look for `gemini.client_available=true`.
+
+Optional frontend verify:
+
+```bash
+terraform output -raw frontend_cloud_run_service_uri
+```
 
 ## 10) API and IAM verification commands
 
@@ -120,15 +132,14 @@ gcloud projects get-iam-policy "$PROJECT_ID" \
   --format="table(bindings.role,bindings.members)"
 ```
 
-## 11) Important current gap
+## 11) Frontend Hosting Decision
 
-Terraform does not currently provision frontend hosting.
+Terraform can provision an optional frontend Cloud Run service when `enable_frontend_cloud_run=true`.
 
-You still need one of these for complete cloud demo:
+You must still provide one of these:
 
-- Cloud Run static container for frontend
-- Firebase Hosting
-- Cloud Storage static website + CDN (if acceptable for demo)
+- Cloud Run frontend: build/push a static frontend image and set `frontend_container_image`, then `terraform apply`
+- External hosting: deploy frontend elsewhere and set `VITE_BACKEND_WS_URL` to the backend websocket (`wss://.../ws/live`)
 
 ## 12) Done criteria for infrastructure
 
@@ -137,3 +148,5 @@ You still need one of these for complete cloud demo:
 - Cloud Run backend reachable
 - Secrets mapped and readable by runtime service account
 - Backend image pulled from Artifact Registry
+- Frontend hosting path implemented (Cloud Run or external + env configuration)
+- Budget guardrail decision captured (enabled or intentionally skipped)

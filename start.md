@@ -36,10 +36,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 cd frontend
-pnpm install
+npm install
 # optional if backend is not localhost:8000
 # export VITE_BACKEND_WS_URL=ws://localhost:8000/ws/live
-pnpm run dev
+npm run dev
 ```
 
 ## 4) Cloud Deploy Path

@@ -13,6 +13,16 @@ output "cloud_run_service_uri" {
   value       = module.cloud_run.service_uri
 }
 
+output "frontend_cloud_run_service_name" {
+  description = "Optional frontend Cloud Run service name"
+  value       = try(module.frontend_cloud_run[0].service_name, null)
+}
+
+output "frontend_cloud_run_service_uri" {
+  description = "Optional frontend Cloud Run service URI"
+  value       = try(module.frontend_cloud_run[0].service_uri, null)
+}
+
 output "enabled_services" {
   description = "GCP APIs enabled for this environment"
   value       = module.project_apis.enabled_services
@@ -42,6 +52,11 @@ output "secret_version_ids" {
   description = "Secret Manager secret versions created via secret_payloads"
   value       = module.secret_manager.secret_version_ids
   sensitive   = true
+}
+
+output "monthly_budget_display_name" {
+  description = "Optional monthly billing budget display name"
+  value       = try(google_billing_budget.monthly_guardrail[0].display_name, null)
 }
 
 output "sql_connection_name" {

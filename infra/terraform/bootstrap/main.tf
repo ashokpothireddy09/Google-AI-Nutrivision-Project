@@ -24,4 +24,9 @@ resource "google_storage_bucket" "terraform_state" {
   }
 
   labels = local.labels
+
+  # State bucket should never be destroyed by normal applies.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
